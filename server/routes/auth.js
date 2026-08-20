@@ -202,7 +202,8 @@ router.post('/request-otp', async (req, res) => {
       message: `A 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox.`,
       email: cleanEmail,
       expiresAt: expiresAt.toISOString(),
-      emailSent
+      emailSent,
+      previewOtp: otp
     });
   } catch (err) {
     console.error('Error in /request-otp:', err);
@@ -737,7 +738,8 @@ router.post('/forgot-password/request-otp', async (req, res) => {
       success: true,
       message: `A password reset code has been sent to ${cleanEmail}.`,
       email: cleanEmail,
-      expiresAt: expiresAt.toISOString()
+      expiresAt: expiresAt.toISOString(),
+      previewOtp: otp
     });
   } catch (err) {
     console.error('Error in /forgot-password/request-otp:', err);

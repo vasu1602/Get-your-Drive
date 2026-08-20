@@ -1396,7 +1396,16 @@ const App = {
 
       this.startOtpTimer(600); // 10 minutes
       this.goToSignupStep(2);
-      this.showToast('Verification code sent to your email');
+
+      if (res && res.previewOtp) {
+        this.showToast(`Verification code: ${res.previewOtp}`, 'success');
+        setTimeout(() => {
+          const input = document.getElementById('auth-otp-input');
+          if (input) input.value = res.previewOtp;
+        }, 150);
+      } else {
+        this.showToast('Verification code sent to your email');
+      }
     } catch (err) {
       if (alertBox) {
         alertBox.textContent = err.message || 'Failed to request verification code.';
@@ -1419,9 +1428,15 @@ const App = {
     if (resendBtn) resendBtn.textContent = 'Resending...';
 
     try {
-      await Api.requestOtp(this.state.signupData.email, this.state.signupData.name);
+      const res = await Api.requestOtp(this.state.signupData.email, this.state.signupData.name);
       this.startOtpTimer(600);
-      this.showToast('New verification code sent to your email!');
+      if (res && res.previewOtp) {
+        this.showToast(`New verification code: ${res.previewOtp}`, 'success');
+        const input = document.getElementById('auth-otp-input');
+        if (input) input.value = res.previewOtp;
+      } else {
+        this.showToast('New verification code sent to your email!');
+      }
     } catch (err) {
       this.showToast(err.message || 'Failed to resend code', 'error');
     } finally {
