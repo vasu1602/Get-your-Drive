@@ -25,11 +25,11 @@ async function sendVerificationEmail({ to, name, otp }) {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 30px 20px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
       <div style="text-align: center; margin-bottom: 24px;">
         <h2 style="color: #1e293b; font-size: 22px; font-weight: 800; margin: 0;">Get Your Drive</h2>
-        <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Account Verification</p>
+        <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Account Verification Code</p>
       </div>
 
       <p style="color: #334155; font-size: 15px; line-height: 1.5;">Hello${name ? ' <strong>' + name + '</strong>' : ''},</p>
-      <p style="color: #334155; font-size: 15px; line-height: 1.5;">Please use the following 6-digit verification code to complete your account registration:</p>
+      <p style="color: #334155; font-size: 15px; line-height: 1.5;">Please use the following 6-digit verification code to complete your account setup:</p>
 
       <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0;">
         <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #2563eb; display: inline-block;">
@@ -48,34 +48,38 @@ async function sendVerificationEmail({ to, name, otp }) {
     </div>
   `;
 
-  // Option 1: Gmail App Password (Unrestricted delivery to any email address)
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+  const gmailUser = (process.env.GMAIL_USER || '').trim();
+  const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+
+  // 1. Primary: Gmail SMTP
+  if (gmailUser && gmailPass) {
     try {
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
-          user: process.env.GMAIL_USER.trim(),
-          pass: process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, '')
+          user: gmailUser,
+          pass: gmailPass
         }
       });
       await transporter.sendMail({
-        from: `"Get Your Drive" <${process.env.GMAIL_USER.trim()}>`,
+        from: `"Get Your Drive" <${gmailUser}>`,
         to,
         subject: `${otp} is your Get Your Drive verification code`,
         html: htmlContent
       });
-      console.log(`✅ [Gmail SMTP] Email successfully delivered to ${to}`);
+      console.log(`✅ [Gmail SMTP] Verification code email delivered to ${to}`);
       return true;
     } catch (gmailErr) {
-      console.warn(`⚠️ [Gmail SMTP Error]: ${gmailErr.message}`);
+      console.warn(`⚠️ [Gmail SMTP Warning]: ${gmailErr.message}. Attempting Resend API fallback...`);
     }
   }
 
-  // Option 2: Resend SDK
-  if (process.env.RESEND_API_KEY) {
+  // 2. Secondary Fallback: Resend SDK
+  if (resendApiKey) {
     try {
       const { Resend } = require('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
+      const resend = new Resend(resendApiKey);
       const resendFrom = process.env.RESEND_FROM || 'Get Your Drive <onboarding@resend.dev>';
       const res = await resend.emails.send({
         from: resendFrom,
@@ -86,7 +90,7 @@ async function sendVerificationEmail({ to, name, otp }) {
       if (res.error) {
         console.warn(`⚠️ [Resend Error]: ${res.error.message}`);
       } else {
-        console.log(`✅ [Resend] Email dispatched to ${to}:`, res);
+        console.log(`✅ [Resend API] Verification code delivered to ${to}:`, res);
         return true;
       }
     } catch (resendErr) {
@@ -94,7 +98,7 @@ async function sendVerificationEmail({ to, name, otp }) {
     }
   }
 
-  // Option 3: Custom SMTP
+  // 3. Option 3: Custom SMTP
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
       const transporter = nodemailer.createTransport({
