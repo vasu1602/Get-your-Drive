@@ -948,10 +948,12 @@ const App = {
     this.saveBookings();
     this.updateCounters();
 
-    // Persist to MongoDB Atlas database
+    // Persist to MongoDB Atlas database & Firebase Realtime Database
+    if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveBooking(newBooking);
+
     Api.createBooking(newBooking).then(res => {
       if (res && res.booking) {
-        console.log('✅ Booking successfully saved to MongoDB Atlas:', res.booking.id);
+        console.log('✅ Booking successfully saved to Database:', res.booking.id);
       }
     }).catch(err => {
       console.warn('Booking API note:', err.message);
@@ -1171,7 +1173,9 @@ const App = {
     };
 
     try {
-      // Sync with backend API
+      // Sync with backend API & Firebase Realtime Database
+      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveCar(newCar);
+
       const res = await Api.addCar(newCar);
       if (res && res.car) {
         this.state.cars.unshift(res.car);
@@ -1531,6 +1535,7 @@ const App = {
 
       this.state.currentUser = res.user;
       this.updateAuthUI(res.user);
+      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveUser(res.user);
       this.closeModal('auth-modal');
       this.showToast(`Account created! Welcome, ${res.user.name}!`, 'success');
       this.resumePendingAction();
@@ -1582,6 +1587,7 @@ const App = {
       const res = await Api.login(email, pass);
       this.state.currentUser = res.user;
       this.updateAuthUI(res.user);
+      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveUser(res.user);
       this.closeModal('auth-modal');
       this.showToast(`Welcome back, ${res.user.name}!`, 'success');
       this.resumePendingAction();
@@ -2206,6 +2212,10 @@ const App = {
       const res = await Api.updateProfile(name, photoURL);
       this.state.currentUser = res.user;
       this.updateAuthUI(res.user);
+      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveUser(res.user);
+
+      // Update avatar previews
+      this.previewAvatarUrl(res.user.photoURL);
       this.showToast('Profile updated successfully!', 'success');
       this.openAccountModal('profile');
     } catch (err) {
