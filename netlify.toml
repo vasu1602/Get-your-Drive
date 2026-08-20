@@ -1,10 +1,19 @@
 # =============================================================================
-# NETLIFY DEPLOYMENT CONFIGURATION
+# NETLIFY DEPLOYMENT & SERVERLESS FUNCTIONS CONFIGURATION
 # =============================================================================
 
 [build]
   publish = "."
+  functions = "netlify/functions"
 
+# 1. Forward all /api/* requests to Netlify Serverless Functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# 2. SPA Single Page Application Route Fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
