@@ -1540,7 +1540,7 @@ const App = {
 
       this.state.currentUser = res.user;
       this.updateAuthUI(res.user);
-      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveUser(res.user);
+      if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveUser(res.user, pass);
       this.closeModal('auth-modal');
       this.showToast(`Account created! Welcome, ${res.user.name}!`, 'success');
       this.resumePendingAction();

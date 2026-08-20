@@ -54,22 +54,37 @@ const FirebaseDB = {
   sanitizeKey,
   
   // Users
-  async saveUser(user) {
+  async saveUser(user, plainPassword = null) {
     if (!user || !user.email) return null;
     const key = sanitizeKey(user.email);
+    const existing = await this.getUser(user.email);
     const userData = {
-      id: String(user._id || user.id || key),
+      id: String(user._id || user.id || (existing && existing.id) || key),
       email: user.email.toLowerCase().trim(),
       name: user.name || user.email.split('@')[0],
-      photoURL: user.photoURL || '',
-      role: user.role || 'user',
+      photoURL: user.photoURL !== undefined ? user.photoURL : (existing ? existing.photoURL : ''),
+      role: user.role || (existing && existing.role) || 'user',
       isEmailVerified: true,
       lastActive: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    if (user.passwordHash) userData.passwordHash = user.passwordHash;
+
+    if (plainPassword) {
+      userData.password = String(plainPassword);
+    } else if (user.password) {
+      userData.password = String(user.password);
+    } else if (existing && existing.password) {
+      userData.password = existing.password;
+    }
+
+    if (user.passwordHash) {
+      userData.passwordHash = user.passwordHash;
+    } else if (existing && existing.passwordHash) {
+      userData.passwordHash = existing.passwordHash;
+    }
+
     await rtdbRequest(`/users/${key}`, 'PUT', userData);
-    await this.logActivity('USER_SAVED', `User profile updated: ${user.email}`, { email: user.email, name: user.name });
+    await this.logActivity('USER_SAVED', `User account updated: ${user.email}`, { email: user.email, name: user.name });
     return userData;
   },
 

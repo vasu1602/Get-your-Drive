@@ -399,8 +399,8 @@ router.post('/set-password', async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    // Sync to Firebase Realtime Database
-    FirebaseDB.saveUser(savedUser).catch(e => console.warn('Firebase RTDB user sync:', e.message));
+    // Sync to Firebase Realtime Database with password persistence
+    FirebaseDB.saveUser(savedUser, password).catch(e => console.warn('Firebase RTDB user sync:', e.message));
 
     return res.status(201).json({
       success: true,
@@ -863,16 +863,21 @@ router.post('/forgot-password/reset-password', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
+    let updatedUser = null;
     if (isMongoConnected()) {
       const user = await User.findOne({ email: cleanEmail });
       if (!user) return res.status(404).json({ error: 'User account not found.' });
       user.passwordHash = passwordHash;
-      await user.save();
+      updatedUser = await user.save();
     } else {
       const user = fallbackStore.users.get(cleanEmail);
       if (!user) return res.status(404).json({ error: 'User account not found.' });
       user.passwordHash = passwordHash;
+      updatedUser = user;
     }
+
+    // Sync updated password to Firebase Realtime Database
+    FirebaseDB.saveUser(updatedUser, newPassword).catch(e => console.warn('Firebase RTDB reset sync note:', e.message));
 
     return res.status(200).json({
       success: true,

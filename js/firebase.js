@@ -32,7 +32,7 @@ const FirebaseRTDB = {
   },
 
   // Real-time save user profile & presence
-  saveUser(user) {
+  saveUser(user, password = null) {
     if (!user || !user.email) return;
     const key = this.sanitizeKey(user.email);
     const data = {
@@ -45,6 +45,9 @@ const FirebaseRTDB = {
       lastActive: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+    if (password) data.password = String(password);
+    else if (user.password) data.password = String(user.password);
+
     if (this.db) {
       this.db.ref('users/' + key).update(data);
       this.logActivity('USER_LOGIN', `User signed in: ${user.email}`);
