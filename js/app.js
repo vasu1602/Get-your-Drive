@@ -670,8 +670,16 @@ const App = {
     this.renderCars();
   },
 
-  // 6. Booking Modal Flow
+  // 6. Booking Modal Flow (Auth-Protected)
   openBookingModal(carId) {
+    // Check if user is logged in
+    if (!this.state.currentUser) {
+      this.state.pendingAction = { type: 'book', carId: carId };
+      this.showToast('Please sign in or create an account to reserve this car', 'info');
+      this.openAuthModal('login', 'Sign in required to reserve a vehicle');
+      return;
+    }
+
     const car = this.state.cars.find(c => c.id === carId);
     if (!car) return;
 
@@ -682,8 +690,8 @@ const App = {
     const modal = document.getElementById('booking-modal');
     const body = document.getElementById('booking-modal-body');
 
-    const defaultName = this.state.currentUser ? (this.state.currentUser.displayName || this.state.currentUser.email.split('@')[0]) : 'Alex Vance';
-    const defaultEmail = this.state.currentUser ? this.state.currentUser.email : 'alex.vance@example.com';
+    const defaultName = this.state.currentUser ? (this.state.currentUser.name || this.state.currentUser.displayName || this.state.currentUser.email.split('@')[0]) : '';
+    const defaultEmail = this.state.currentUser ? this.state.currentUser.email : '';
 
     body.innerHTML = `
       <div>
@@ -879,8 +887,15 @@ const App = {
   },
 
   confirmBooking() {
+    if (!this.state.currentUser) {
+      this.showToast('Please sign in or create an account to complete your booking', 'warning');
+      this.closeModal('booking-modal');
+      this.openAuthModal('login', 'Sign in required to confirm reservation');
+      return;
+    }
+
     const car = this.state.selectedCar;
-    const name = document.getElementById('book-name')?.value || 'Guest Driver';
+    const name = document.getElementById('book-name')?.value || this.state.currentUser.name || 'Valued Driver';
     const pickDate = document.getElementById('book-pick-date')?.value;
     let retDate = document.getElementById('book-ret-date')?.value;
     const location = document.getElementById('book-location')?.value;
@@ -1491,12 +1506,7 @@ const App = {
       this.updateAuthUI(res.user);
       this.closeModal('auth-modal');
       this.showToast(`Account created! Welcome, ${res.user.name}!`, 'success');
-
-      // If user attempted to add a car before auth, auto-open
-      if (this.state.pendingAction === 'add-car') {
-        this.state.pendingAction = null;
-        setTimeout(() => this.openAddCarModal(), 300);
-      }
+      this.resumePendingAction();
     } catch (err) {
       if (alertBox) {
         alertBox.textContent = err.message || 'Failed to complete registration.';
@@ -1507,6 +1517,21 @@ const App = {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Complete Account Setup ✓';
       }
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // RESUME PENDING USER ACTION (Bookings / Add Car)
+  // ---------------------------------------------------------------------------
+  resumePendingAction() {
+    if (!this.state.pendingAction) return;
+    const action = this.state.pendingAction;
+    this.state.pendingAction = null;
+
+    if (action === 'add-car') {
+      setTimeout(() => this.openAddCarModal(), 300);
+    } else if (typeof action === 'object' && action.type === 'book') {
+      setTimeout(() => this.openBookingModal(action.carId), 300);
     }
   },
 
@@ -1532,11 +1557,7 @@ const App = {
       this.updateAuthUI(res.user);
       this.closeModal('auth-modal');
       this.showToast(`Welcome back, ${res.user.name}!`, 'success');
-
-      if (this.state.pendingAction === 'add-car') {
-        this.state.pendingAction = null;
-        setTimeout(() => this.openAddCarModal(), 300);
-      }
+      this.resumePendingAction();
     } catch (err) {
       if (alertBox) {
         alertBox.textContent = err.message || 'Failed to sign in. Please verify your credentials.';
