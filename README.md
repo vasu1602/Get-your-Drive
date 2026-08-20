@@ -103,40 +103,6 @@
 
 ---
 
-## 🚀 Quick Start & Installation
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/vasu1602/Get-your-Drive.git
-cd Get-your-Drive
-```
-
-### 2. Install Dependencies
-```bash
-npm install
-```
-
-### 3. Configure Environment Variables
-Create a `.env` file in the root directory:
-```env
-PORT=3000
-MONGODB_URI=your_mongodb_atlas_connection_string
-FIREBASE_DATABASE_URL=https://getyourdrive-148f5-default-rtdb.firebaseio.com
-JWT_SECRET=your_secure_jwt_secret
-JWT_VERIFY_SECRET=your_secure_otp_secret
-RESEND_API_KEY=your_resend_api_key
-GMAIL_USER=your_email@gmail.com
-GMAIL_APP_PASSWORD=your_gmail_app_password
-```
-
-### 4. Run Locally
-```bash
-# Start local development server
-npm start
-```
-Open **`http://localhost:3000`** in your browser.
-
----
 
 ## 📄 License & Author
 
