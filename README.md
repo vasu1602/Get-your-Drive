@@ -36,7 +36,7 @@
 - **Password Security**: Bcrypt hashing (`bcryptjs`), persistent sessions with JSON Web Tokens (`jsonwebtoken`).
 - **Forgot Password Recovery**: Instant reset code verification with secure 15-minute reset tokens.
 
-### 🔥 2. Real-Time Cloud Synchronization (Firebase RTDB + MongoDB Atlas)
+### 🔥 2. Real-Time Cloud Synchronization (Firebase RTDB)
 - **`users/`**: Real-time user accounts, display names, profile avatars, and credentials.
 - **`cars/`**: Real-time fleet vehicles with rates, categories, specifications, and owner tracking.
 - **`bookings/`**: Live customer reservations, date intervals, driver details, and status.
