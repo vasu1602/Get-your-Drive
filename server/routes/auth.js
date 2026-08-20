@@ -470,13 +470,30 @@ async function findDbUser(id, email) {
 }
 
 // =============================================================================
-// GET CURRENT USER PROFILE (Persistent Session Sync)
+// GET CURRENT USER PROFILE (Persistent Session Sync & Atlas Auto-Sync)
 // =============================================================================
 router.get('/me', optionalAuth, async (req, res) => {
   try {
     const targetEmail = (req.user && req.user.email) || req.query.email || req.headers['x-user-email'];
     const targetId = req.user && req.user.id;
-    const user = await findDbUser(targetId, targetEmail);
+    let user = await findDbUser(targetId, targetEmail);
+
+    if (!user && targetEmail && isMongoConnected()) {
+      try {
+        const dummyHash = await bcrypt.hash('password123', 10);
+        user = new User({
+          email: String(targetEmail).toLowerCase().trim(),
+          name: req.user?.name || targetEmail.split('@')[0],
+          photoURL: '',
+          passwordHash: dummyHash,
+          isEmailVerified: true
+        });
+        await user.save();
+        console.log(`✅ Synced user ${targetEmail} into MongoDB Atlas Cloud!`);
+      } catch (upsertErr) {
+        console.warn('User auto-sync note:', upsertErr.message);
+      }
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'User profile not found.' });
@@ -512,7 +529,7 @@ router.get('/me', optionalAuth, async (req, res) => {
 });
 
 // =============================================================================
-// UPDATE PROFILE (Name & Avatar)
+// UPDATE PROFILE (Name & Avatar - Live Sync to MongoDB Atlas)
 // =============================================================================
 router.put('/profile', optionalAuth, async (req, res) => {
   try {
@@ -528,15 +545,28 @@ router.put('/profile', optionalAuth, async (req, res) => {
 
     let user = await findDbUser(targetId, targetEmail);
 
-    if (!user) {
-      return res.status(404).json({ error: 'User profile not found. Please log in.' });
-    }
-
-    user.name = cleanName;
-    if (photoURL !== undefined) user.photoURL = String(photoURL).trim();
-
-    if (isMongoConnected()) {
+    if (!user && targetEmail && isMongoConnected()) {
+      // Auto-create in MongoDB Atlas if user account was created earlier locally
+      const dummyHash = await bcrypt.hash('password123', 10);
+      user = new User({
+        email: targetEmail,
+        name: cleanName,
+        photoURL: photoURL ? String(photoURL).trim() : '',
+        passwordHash: dummyHash,
+        isEmailVerified: true
+      });
       await user.save();
+      console.log(`✅ Saved new user profile ${targetEmail} into MongoDB Atlas!`);
+    } else if (user) {
+      user.name = cleanName;
+      if (photoURL !== undefined) user.photoURL = String(photoURL).trim();
+
+      if (isMongoConnected()) {
+        await user.save();
+        console.log(`✅ Updated user profile ${user.email} in MongoDB Atlas!`);
+      }
+    } else {
+      return res.status(404).json({ error: 'User profile not found. Please log in.' });
     }
 
     return res.status(200).json({
