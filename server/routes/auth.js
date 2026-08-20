@@ -327,7 +327,7 @@ router.post('/set-password', async (req, res) => {
       return res.status(400).json({ error: 'Invalid verification token.' });
     }
 
-    const email = payload.email.toLowerCase();
+    const email = payload.email.toLowerCase().trim();
     const finalName = name ? name.trim() : (payload.name || email.split('@')[0]);
 
     // Hash Password using bcrypt
@@ -336,25 +336,26 @@ router.post('/set-password', async (req, res) => {
 
     let savedUser;
     if (isMongoConnected()) {
-      // Check if user already exists
-      const existing = await User.findOne({ email });
+      // Check if user already exists in Atlas
+      let existing = await User.findOne({ email });
       if (existing) {
-        return res.status(400).json({ error: 'An account with this email already exists.' });
+        existing.passwordHash = passwordHash;
+        existing.name = finalName;
+        existing.isEmailVerified = true;
+        savedUser = await existing.save();
+        console.log(`✅ Updated existing user password in MongoDB Atlas for: ${email}`);
+      } else {
+        const newUser = new User({
+          email,
+          passwordHash,
+          name: finalName,
+          role: 'user',
+          isEmailVerified: true
+        });
+        savedUser = await newUser.save();
+        console.log(`✅ Created brand new user in MongoDB Atlas: ${email}`);
       }
-
-      const newUser = new User({
-        email,
-        passwordHash,
-        name: finalName,
-        role: 'user',
-        isEmailVerified: true
-      });
-      savedUser = await newUser.save();
     } else {
-      if (fallbackStore.users.has(email)) {
-        return res.status(400).json({ error: 'An account with this email already exists.' });
-      }
-
       savedUser = {
         _id: 'user_' + Date.now(),
         email,
@@ -367,21 +368,21 @@ router.post('/set-password', async (req, res) => {
       fallbackStore.users.set(email, savedUser);
     }
 
-    // Issue standard Session JWT Token (7-day validity)
+    // Issue standard Session JWT Token (30-day validity)
     const sessionToken = jwt.sign(
       {
-        id: String(savedUser._id),
+        id: String(savedUser._id || savedUser.id),
         email: savedUser.email,
         name: savedUser.name,
         role: savedUser.role
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     return res.status(201).json({
       success: true,
-      message: 'Account created successfully! Welcome to Get Your Drive.',
+      message: 'Account setup successfully! Welcome to Get Your Drive.',
       token: sessionToken,
       user: {
         id: String(savedUser._id || savedUser.id),
@@ -409,21 +410,19 @@ router.post('/login', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-
-    let user = null;
-    if (isMongoConnected()) {
-      user = await User.findOne({ email: cleanEmail });
-    } else {
-      user = fallbackStore.users.get(cleanEmail);
-    }
+    const user = await findDbUser(null, cleanEmail);
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'No account found with this email. Please check your spelling or register an account.' });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(401).json({ error: 'No password set for this account yet. Please use "Forgot Password" or verify via OTP.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'Incorrect password. Please try again or use "Forgot Password".' });
     }
 
     const sessionToken = jwt.sign(
@@ -455,7 +454,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Safe User Finder Helper (MongoDB ObjectId or Email)
+// Safe User Finder Helper (MongoDB ObjectId or Case-Insensitive Email)
 async function findDbUser(id, email) {
   const cleanEmail = email ? String(email).trim().toLowerCase() : null;
   if (isMongoConnected()) {
@@ -464,7 +463,9 @@ async function findDbUser(id, email) {
       user = await User.findById(id);
     }
     if (!user && cleanEmail) {
-      user = await User.findOne({ email: cleanEmail });
+      user = await User.findOne({
+        email: { $regex: new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      });
     }
     return user;
   } else {
