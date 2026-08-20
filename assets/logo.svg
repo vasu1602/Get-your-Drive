@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <!-- Rich Multi-Stop Gradients -->
+    <linearGradient id="carBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="35%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    
+    <linearGradient id="neonSweep" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+
+    <linearGradient id="wheelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+
+    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0369a1" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#2563eb" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#glowFilter)">
+    <!-- Steering Wheel Dynamic Ring (Right / Background Arc) -->
+    <path d="M42 22C49 24 54 30.5 54 38C54 47.4 46.4 55 37 55C31.5 55 26.6 52.4 23.5 48.3" 
+          stroke="url(#wheelGrad)" stroke-width="4.5" stroke-linecap="round"/>
+    
+    <!-- Steering Center Spokes -->
+    <path d="M43 38H52M37 43V52M31 36L25 43" 
+          stroke="url(#wheelGrad)" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Bottom Speed Ribbon Sweeping from Car to Steering Wheel -->
+    <path d="M6 46C14 53 28 54 44 43C48 40.2 51 36.5 52 32C46 38 34 42 16 38C11 36.8 8 39.5 6 46Z" 
+          fill="url(#neonSweep)"/>
+
+    <!-- Aerodynamic Supercar Body Silhouette -->
+    <path d="M8 40C9 35 13 32 16 30L26 23C29 20.8 33 19.5 37 20H46C49.5 20 52 22 54 25L52 27C47 24.5 41 24 36 24.5L25 31C21 33.5 17 37 13 42C11 44 9 43 8 40Z" 
+          fill="url(#carBodyGrad)"/>
+
+    <!-- Sleek Cockpit / Glass Canopy -->
+    <path d="M26.5 24L34 21.5C37 20.5 41 20.5 44 21.5L47 24.5C41 24 33 24.5 26.5 24Z" 
+          fill="url(#glassGrad)"/>
+
+    <!-- Hypercar Front Fender & Headlight Glow Accent -->
+    <path d="M12 37C14 34 18 32.5 22 32.5C20 34 17 36 15 39C13.5 39 12.5 38.5 12 37Z" 
+          fill="#38bdf8"/>
+    
+    <!-- Futuristic Headlight Flare -->
+    <ellipse cx="14" cy="35" rx="3" ry="1.2" transform="rotate(-20 14 35)" fill="#ffffff"/>
+
+    <!-- Wheel Arch Cutouts -->
+    <circle cx="21" cy="42" r="5" fill="#0b0f19" stroke="url(#neonSweep)" stroke-width="2"/>
+    <circle cx="21" cy="42" r="2.2" fill="#38bdf8"/>
+
+    <!-- Speed Streaks in Airflow -->
+    <path d="M4 35C9 31 16 29 22 28M2 41C7 39 12 38 17 38" 
+          stroke="url(#neonSweep)" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="1 3"/>
+  </g>
+</svg>

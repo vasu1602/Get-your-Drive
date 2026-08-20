@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get Your Drive | Simple & Modern Car Rental</title>
+  <meta name="description" content="Simple, fast, and modern car rentals. Book sedans, SUVs, electric vehicles, and sports cars with zero hassle." />
+
+  <!-- Favicon / Tab Icon -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="alternate icon" href="assets/logo.svg" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Firebase Web SDK (Compat version for clean modular support) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. NAVIGATION BAR
+       ========================================================================= -->
+  <header class="navbar">
+    <div class="container nav-wrapper">
+      <a href="#" class="brand-logo">
+        <img src="assets/logo.svg" alt="Get Your Drive" class="brand-logo-img" width="44" height="44" />
+        <span>Get Your <span class="brand-highlight">Drive</span></span>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#fleet" class="nav-link active">Explore Fleet</a></li>
+          <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
+          <li>
+            <a href="#" class="nav-link" onclick="event.preventDefault(); App.openMyBookingsModal();">
+              <span>My Bookings</span>
+              <span class="nav-pill" id="my-bookings-count">0</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="nav-link" onclick="event.preventDefault(); App.state.activeCategory='all'; App.renderCars();">
+              <span>Saved Cars</span>
+              <span class="nav-pill" id="wishlist-count" style="background: var(--accent-amber);">0</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Auth-Gated Add Car Button -->
+        <button class="btn btn-outline btn-sm" onclick="App.openAddCarModal()">
+          + Add Car
+        </button>
+
+        <!-- Dynamic Auth Button / User Profile -->
+        <div id="nav-auth-container">
+          <button class="btn btn-primary btn-sm" onclick="App.openAuthModal('login')">
+            Log In / Sign Up
+          </button>
+        </div>
+
+        <button class="btn btn-secondary btn-icon" onclick="App.toggleTheme()" title="Toggle Light/Dark Theme">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       2. HERO SECTION WITH SEARCH WIDGET
+       ========================================================================= -->
+  <main>
+    <section class="hero-section">
+      <div class="container">
+        <div class="hero-tag">
+          <span style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            Fast, Simple & Verified Car Rentals
+          </span>
+        </div>
+        <h1 class="hero-title">
+          Find & Book Your Ideal Car in Minutes
+        </h1>
+        <p class="hero-subtitle">
+          Choose from verified electric, luxury, SUV, and economy vehicles with instant confirmation and best rates guaranteed.
+        </p>
+
+        <!-- Floating Search Card -->
+        <div class="search-card">
+          <form id="hero-search-form">
+            <div class="search-form-grid">
+              <div class="form-group">
+                <label class="form-label">
+                  <svg class="label-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  Pick-up Location
+                </label>
+                <select id="search-pickup" class="form-select"></select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  <svg class="label-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                  Drop-off Location
+                </label>
+                <select id="search-dropoff" class="form-select"></select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  <svg class="label-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  Pick-up Date
+                </label>
+                <input type="date" id="search-pickdate" class="form-input" required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  <svg class="label-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  Return Date
+                </label>
+                <input type="date" id="search-retdate" class="form-input" required />
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="height: 42px;">
+                Search Cars
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+       3. VEHICLE FLEET & CATEGORY FILTERS
+       ========================================================================= -->
+    <section class="fleet-section" id="fleet">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">Available Vehicles</h2>
+
+          <!-- Category Pills -->
+          <div class="category-pills">
+            <button class="pill-btn active" data-cat="all">All Fleet</button>
+            <button class="pill-btn" data-cat="sedan">Sedans</button>
+            <button class="pill-btn" data-cat="suv">SUVs</button>
+            <button class="pill-btn" data-cat="electric">Electric (EV)</button>
+            <button class="pill-btn" data-cat="sports">Sports</button>
+            <button class="pill-btn" data-cat="luxury">Luxury</button>
+            <button class="pill-btn" data-cat="economy">Economy</button>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="filter-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
+            <input type="text" id="car-search-input" placeholder="Search by model or brand (e.g. Tesla, BMW, Ford)..." />
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <select id="car-sort-select" class="form-select" style="width: auto;">
+              <option value="featured">Sort: Featured</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="rating">Top Rated</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dynamic Cars Grid -->
+        <div class="cars-grid" id="cars-grid"></div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+       4. HOW IT WORKS / TRUST SECTION
+       ========================================================================= -->
+    <section class="features-section" id="how-it-works">
+      <div class="container">
+        <div style="text-align: center; max-width: 600px; margin: 0 auto;">
+          <h2 class="section-title">Rent in 3 Simple Steps</h2>
+          <p style="color: var(--text-muted); margin-top: 0.4rem;">We make car renting straightforward and hassle-free.</p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-box">
+            <div class="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <h3 class="feature-title">1. Choose Your Car</h3>
+            <p class="feature-desc">Select from our wide range of electric, luxury, and economical models.</p>
+          </div>
+
+          <div class="feature-box">
+            <div class="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <h3 class="feature-title">2. Select Your Dates</h3>
+            <p class="feature-desc">Pick your pickup and return dates with clear, transparent daily pricing.</p>
+          </div>
+
+          <div class="feature-box">
+            <div class="feature-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>
+            </div>
+            <h3 class="feature-title">3. Instant Confirmation</h3>
+            <p class="feature-desc">Receive instant digital booking confirmation and key access instructions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =========================================================================
+       5. FOOTER
+       ========================================================================= -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <p class="footer-copyright">© 2026 | Built and designed by Vasu hapani</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       6. MODALS
+       ========================================================================= -->
+
+  <!-- AUTHENTICATION (LOGIN / REGISTER) MODAL -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal-dialog" style="max-width: 460px;">
+      <div class="modal-head">
+        <h3 class="modal-title">Welcome to Get Your Drive</h3>
+        <button class="modal-close" onclick="App.closeModal('auth-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Auth Notice Banner (e.g. when gated from adding cars) -->
+        <div id="auth-notice-box" class="auth-notice" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <span id="auth-notice-msg">Sign in required to list a vehicle</span>
+        </div>
+
+        <!-- Auth Tabs -->
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn active" id="tab-btn-login" onclick="App.switchAuthTab('login')">
+            Log In
+          </button>
+          <button type="button" class="auth-tab-btn" id="tab-btn-register" onclick="App.switchAuthTab('register')">
+            Create Account
+          </button>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="auth-alert-box" class="auth-alert"></div>
+
+        <!-- 1. Login Form -->
+        <form id="auth-login-form" onsubmit="App.handleEmailLogin(event)">
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label class="form-label">Email Address</label>
+            <input type="email" id="auth-login-email" class="form-input" placeholder="name@example.com" required autocomplete="email" />
+          </div>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label class="form-label" style="margin-bottom: 0;">Password</label>
+              <button type="button" class="btn-link" onclick="App.openForgotPasswordFlow()" style="font-size: 0.78rem;">Forgot Password?</button>
+            </div>
+            <div class="password-input-wrap">
+              <input type="password" id="auth-login-pass" class="form-input" placeholder="••••••••" required autocomplete="current-password" />
+              <button type="button" class="password-toggle-btn" onclick="App.togglePasswordVisibility('auth-login-pass', this)" title="Show / Hide Password" aria-label="Toggle password visibility">
+                <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+          </div>
+          <button type="submit" id="auth-login-btn" class="btn btn-primary" style="width: 100%;">
+            Sign In to Get Your Drive
+          </button>
+        </form>
+
+        <!-- 2. Register Form with 3-Step OTP Flow -->
+        <div id="auth-register-container" style="display: none;">
+          
+          <!-- Step Progress Indicator -->
+          <div class="signup-step-tracker">
+            <div class="step-track-item active" id="track-step-1">
+              <span class="step-track-num">1</span>
+              <span class="step-track-label">Email</span>
+            </div>
+            <div class="step-track-line" id="track-line-1"></div>
+            <div class="step-track-item" id="track-step-2">
+              <span class="step-track-num">2</span>
+              <span class="step-track-label">Verify OTP</span>
+            </div>
+            <div class="step-track-line" id="track-line-2"></div>
+            <div class="step-track-item" id="track-step-3">
+              <span class="step-track-num">3</span>
+              <span class="step-track-label">Password</span>
+            </div>
+          </div>
+
+          <!-- STEP 1: Request OTP -->
+          <form id="signup-step-1-form" onsubmit="App.handleRequestOtp(event)">
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label">Full Name</label>
+              <input type="text" id="auth-reg-name" class="form-input" placeholder="e.g. Alex Vance" required />
+            </div>
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Email Address</label>
+              <input type="email" id="auth-reg-email" class="form-input" placeholder="name@example.com" required />
+            </div>
+            <button type="submit" id="request-otp-btn" class="btn btn-primary" style="width: 100%;">
+              Send Verification Code →
+            </button>
+          </form>
+
+          <!-- STEP 2: Verify OTP -->
+          <form id="signup-step-2-form" style="display: none;" onsubmit="App.handleVerifyOtp(event)">
+            <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.88rem;">
+              <div style="color: var(--text-muted); font-size: 0.82rem;">Code sent to:</div>
+              <div style="font-weight: 700; color: var(--primary);" id="otp-sent-email-display">user@example.com</div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label" style="display: flex; justify-content: space-between;">
+                <span>Enter 6-Digit OTP</span>
+                <span class="timer-badge" id="otp-timer-badge">10:00</span>
+              </label>
+              <input type="text" id="auth-otp-input" class="form-input otp-code-input" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required />
+            </div>
+
+            <button type="submit" id="verify-otp-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 0.75rem;">
+              Verify Code & Continue →
+            </button>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem;">
+              <button type="button" class="btn-link" onclick="App.goToSignupStep(1)">← Change Email</button>
+              <button type="button" class="btn-link" id="resend-otp-btn" onclick="App.handleResendOtp()">Resend Code</button>
+            </div>
+          </form>
+
+          <!-- STEP 3: Set Password & Create Account -->
+          <form id="signup-step-3-form" style="display: none;" onsubmit="App.handleSetPassword(event)">
+            <div style="display: flex; align-items: center; gap: 0.4rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: var(--accent-emerald); padding: 0.65rem 0.9rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem; font-size: 0.85rem; font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Email Verified! Set your secure password.</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label">New Password (Min. 6 characters)</label>
+              <div class="password-input-wrap">
+                <input type="password" id="auth-reg-pass" class="form-input" placeholder="••••••••" required minlength="6" />
+                <button type="button" class="password-toggle-btn" onclick="App.togglePasswordVisibility('auth-reg-pass', this)" title="Show / Hide Password" aria-label="Toggle password visibility">
+                  <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Confirm Password</label>
+              <div class="password-input-wrap">
+                <input type="password" id="auth-reg-pass-confirm" class="form-input" placeholder="••••••••" required minlength="6" />
+                <button type="button" class="password-toggle-btn" onclick="App.togglePasswordVisibility('auth-reg-pass-confirm', this)" title="Show / Hide Password" aria-label="Toggle password visibility">
+                  <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" id="complete-signup-btn" class="btn btn-primary" style="width: 100%;">
+              Complete Account Setup ✓
+            </button>
+          </form>
+
+        </div>
+
+        <!-- 3. Forgot Password / Reset Flow -->
+        <div id="auth-forgot-container" style="display: none;">
+          <div style="margin-bottom: 1.25rem;">
+            <h4 style="font-size: 1.1rem; font-weight: 800; margin: 0 0 0.35rem 0;">Reset Your Password</h4>
+            <p style="color: var(--text-muted); font-size: 0.84rem; margin: 0;">We'll send a 6-digit OTP to your email to securely reset your password.</p>
+          </div>
+
+          <!-- Step 1: Request Reset OTP -->
+          <form id="forgot-step-1-form" onsubmit="App.handleRequestForgotOtp(event)">
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Enter Registered Email</label>
+              <input type="email" id="auth-forgot-email" class="form-input" placeholder="name@example.com" required />
+            </div>
+            <button type="submit" id="forgot-req-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 0.85rem;">
+              Send Reset Code →
+            </button>
+            <div style="text-align: center;">
+              <button type="button" class="btn-link" onclick="App.switchAuthTab('login')">← Back to Sign In</button>
+            </div>
+          </form>
+
+          <!-- Step 2: Verify Reset OTP -->
+          <form id="forgot-step-2-form" style="display: none;" onsubmit="App.handleVerifyForgotOtp(event)">
+            <div style="background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.88rem;">
+              <div style="color: var(--text-muted); font-size: 0.82rem;">Reset code sent to:</div>
+              <div style="font-weight: 700; color: var(--primary);" id="forgot-sent-email-display">user@example.com</div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Enter 6-Digit Reset Code</label>
+              <input type="text" id="auth-forgot-otp-input" class="form-input otp-code-input" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" required />
+            </div>
+
+            <button type="submit" id="forgot-verify-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 0.75rem;">
+              Verify Reset Code →
+            </button>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem;">
+              <button type="button" class="btn-link" onclick="App.goToForgotStep(1)">← Change Email</button>
+              <button type="button" class="btn-link" onclick="App.handleResendForgotOtp()">Resend Code</button>
+            </div>
+          </form>
+
+          <!-- Step 3: Set New Password -->
+          <form id="forgot-step-3-form" style="display: none;" onsubmit="App.handleResetPasswordWithToken(event)">
+            <div style="display: flex; align-items: center; gap: 0.4rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: var(--accent-emerald); padding: 0.65rem 0.9rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem; font-size: 0.85rem; font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Code verified! Enter your new password below.</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label">New Password (Min. 6 characters)</label>
+              <div class="password-input-wrap">
+                <input type="password" id="auth-forgot-new-pass" class="form-input" placeholder="••••••••" required minlength="6" />
+                <button type="button" class="password-toggle-btn" onclick="App.togglePasswordVisibility('auth-forgot-new-pass', this)" title="Show / Hide Password" aria-label="Toggle password visibility">
+                  <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Confirm New Password</label>
+              <div class="password-input-wrap">
+                <input type="password" id="auth-forgot-new-pass-confirm" class="form-input" placeholder="••••••••" required minlength="6" />
+                <button type="button" class="password-toggle-btn" onclick="App.togglePasswordVisibility('auth-forgot-new-pass-confirm', this)" title="Show / Hide Password" aria-label="Toggle password visibility">
+                  <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" id="forgot-complete-btn" class="btn btn-primary" style="width: 100%;">
+              Reset Password & Sign In ✓
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Booking Modal -->
+  <div class="modal-overlay" id="booking-modal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 class="modal-title">Book Your Vehicle</h3>
+        <button class="modal-close" onclick="App.closeModal('booking-modal')">✕</button>
+      </div>
+      <div class="modal-body" id="booking-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Car Specs Details Modal -->
+  <div class="modal-overlay" id="details-modal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 class="modal-title">Vehicle Specifications</h3>
+        <button class="modal-close" onclick="App.closeModal('details-modal')">✕</button>
+      </div>
+      <div class="modal-body" id="details-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- My Bookings Modal -->
+  <div class="modal-overlay" id="my-bookings-modal">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-head">
+        <h3 class="modal-title">My Rental Reservations</h3>
+        <button class="modal-close" onclick="App.closeModal('my-bookings-modal')">✕</button>
+      </div>
+      <div class="modal-body" id="my-bookings-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- User Account & Listed Cars Modal -->
+  <div class="modal-overlay" id="account-modal">
+    <div class="modal-dialog" style="max-width: 640px;">
+      <div class="modal-head">
+        <h3 class="modal-title">My Account Dashboard</h3>
+        <button class="modal-close" onclick="App.closeModal('account-modal')">✕</button>
+      </div>
+      <div class="modal-body" id="account-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Photo Crop & Adjustment Modal -->
+  <div class="modal-overlay" id="crop-modal" style="z-index: 1200;">
+    <div class="modal-dialog" style="max-width: 440px; text-align: center;">
+      <div class="modal-head">
+        <h3 class="modal-title">Adjust & Crop Photo</h3>
+        <button class="modal-close" onclick="App.closeCropModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Drag to position, use the slider to zoom, and rotate to fit your profile avatar.
+        </p>
+
+        <!-- Crop Viewport Container -->
+        <div class="crop-viewport-wrap" id="crop-viewport-container">
+          <canvas id="crop-canvas" width="300" height="300"></canvas>
+          <div class="crop-circle-mask"></div>
+        </div>
+
+        <!-- Adjustment Controls -->
+        <div class="crop-controls-panel">
+          <!-- Zoom Controls -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.85rem;">
+            <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted);">Zoom</span>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="App.adjustCropZoom(-0.1)">-</button>
+            <input type="range" id="crop-zoom-range" min="1" max="3" step="0.02" value="1" style="flex: 1; accent-color: var(--primary);" oninput="App.onCropZoomChange(this.value)" />
+            <button type="button" class="btn btn-secondary btn-xs" onclick="App.adjustCropZoom(0.1)">+</button>
+          </div>
+
+          <!-- Rotate & Reset Controls -->
+          <div style="display: flex; justify-content: center; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="App.rotateCropImage(90)" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+              Rotate 90°
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="App.resetCropAdjustments()">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeCropModal()">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" style="flex: 1.5;" onclick="App.applyCroppedPhoto()">
+            Apply Photo ✓
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add New Car Modal (Auth-Protected) -->
+  <div class="modal-overlay" id="add-car-modal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 class="modal-title">+ List a Vehicle on Get Your Drive</h3>
+        <button class="modal-close" onclick="App.closeModal('add-car-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="event.preventDefault(); App.saveNewCar();">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Car Model Name</label>
+              <input type="text" id="new-name" class="form-input" placeholder="e.g. Audi RS6 Avant" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Brand</label>
+              <input type="text" id="new-brand" class="form-input" placeholder="e.g. Audi" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select id="new-cat" class="form-select">
+                <option value="sedan">Sedan</option>
+                <option value="suv">SUV</option>
+                <option value="electric">Electric (EV)</option>
+                <option value="sports">Sports</option>
+                <option value="luxury">Luxury</option>
+                <option value="economy">Economy</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Price per Day ($)</label>
+              <input type="number" id="new-price" class="form-input" placeholder="e.g. 89" min="10" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Fuel Type</label>
+              <select id="new-fuel" class="form-select">
+                <option value="Petrol">Petrol</option>
+                <option value="Electric">Electric</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="Diesel">Diesel</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Transmission</label>
+              <select id="new-trans" class="form-select">
+                <option value="Automatic">Automatic</option>
+                <option value="Manual">Manual</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label class="form-label" style="margin-bottom: 0.35rem;">Vehicle Photo</label>
+            
+            <div style="display: flex; gap: 0.75rem; align-items: center; background: var(--bg-card-subtle); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('new-car-file-input').click()" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Choose Photo from Device
+              </button>
+              <span id="new-car-file-label" style="font-size: 0.8rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">
+                Default photo selected
+              </span>
+              <input type="file" id="new-car-file-input" accept="image/*" style="display: none;" onchange="App.handleCarFileUpload(event)" />
+            </div>
+
+            <!-- Preview & Re-adjust Box -->
+            <div id="new-car-img-preview" style="margin-top: 0.75rem; position: relative; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);">
+              <img id="new-car-preview-img" src="https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?auto=format&fit=crop&w=800&q=80" alt="Car Preview" style="width: 100%; height: 140px; object-fit: cover; display: block;" />
+              <button type="button" class="btn btn-secondary btn-xs" onclick="App.reAdjustCarPhoto()" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.85); color: #fff; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px);">
+                ✂️ Adjust / Crop
+              </button>
+            </div>
+
+            <!-- Hidden input with image data / URL for MongoDB -->
+            <input type="hidden" id="new-image" value="https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?auto=format&fit=crop&w=800&q=80" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Save & Publish to Fleet
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Box -->
+  <div id="toast-box"></div>
+
+  <!-- Application Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/firebase.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
