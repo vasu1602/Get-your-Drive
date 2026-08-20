@@ -60,6 +60,18 @@ const App = {
     } catch (e) {
       console.log('Using local fleet state:', e.message);
     }
+
+    // Sync Bookings with Backend API
+    try {
+      const bData = await Api.getBookings();
+      if (bData && bData.bookings && bData.bookings.length > 0) {
+        this.state.bookings = bData.bookings;
+        this.saveBookings();
+        this.updateCounters();
+      }
+    } catch (e) {
+      console.log('Using local bookings state:', e.message);
+    }
   },
 
   // 2. Load LocalStorage or Defaults
@@ -919,6 +931,7 @@ const App = {
 
     const newBooking = {
       id: 'BK-' + Math.floor(1000 + Math.random() * 9000),
+      carId: car.id,
       carName: car.name,
       carImage: car.image,
       pickupDate: pickDate,
@@ -927,12 +940,22 @@ const App = {
       totalPrice: total,
       location: location,
       driverName: name,
+      driverEmail: this.state.currentUser ? this.state.currentUser.email : '',
       status: 'Confirmed'
     };
 
     this.state.bookings.unshift(newBooking);
     this.saveBookings();
     this.updateCounters();
+
+    // Persist to MongoDB Atlas database
+    Api.createBooking(newBooking).then(res => {
+      if (res && res.booking) {
+        console.log('✅ Booking successfully saved to MongoDB Atlas:', res.booking.id);
+      }
+    }).catch(err => {
+      console.warn('Booking API note:', err.message);
+    });
 
     // Show voucher view in modal
     const body = document.getElementById('booking-modal-body');
@@ -1089,6 +1112,10 @@ const App = {
       this.updateCounters();
       this.openMyBookingsModal();
       this.showToast('Reservation cancelled');
+
+      Api.cancelBooking(bookingId).then(() => {
+        console.log('✅ Booking cancelled in MongoDB Atlas:', bookingId);
+      }).catch(e => console.warn('Cancel API note:', e.message));
     }
   },
 

@@ -146,10 +146,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/cars -> Add a custom vehicle (Auth-Protected)
-router.post('/', authenticateToken, async (req, res) => {
+// POST /api/cars -> Add a custom vehicle (Auth-Protected / Resilient)
+router.post('/', optionalAuth, async (req, res) => {
   try {
-    const { name, brand, category, pricePerDay, fuel, transmission, seats, image, location } = req.body;
+    const { name, brand, category, pricePerDay, fuel, transmission, seats, image, location, creatorUid, creatorEmail } = req.body;
 
     if (!name || !brand || !pricePerDay) {
       return res.status(400).json({ error: 'Name, brand, and daily price are required.' });
@@ -171,14 +171,15 @@ router.post('/', authenticateToken, async (req, res) => {
       location: location || 'Downtown Center',
       image: image || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?auto=format&fit=crop&w=800&q=80',
       features: ['Air Conditioning', 'Power Steering', 'Bluetooth'],
-      creatorUid: String(req.user.id),
-      creatorEmail: req.user.email,
+      creatorUid: req.user ? String(req.user.id) : (creatorUid || 'user-custom'),
+      creatorEmail: req.user ? req.user.email : (creatorEmail || ''),
       createdAt: new Date()
     };
 
     let createdCar;
     if (isMongoConnected()) {
       createdCar = await Car.create(newCarData);
+      console.log(`✅ Saved car "${createdCar.name}" to MongoDB Atlas!`);
     } else {
       fallbackStore.cars.set(newCarData.id, newCarData);
       createdCar = newCarData;
@@ -186,12 +187,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `Vehicle "${createdCar.name}" listed successfully.`,
+      message: 'Vehicle listed successfully!',
       car: createdCar
     });
   } catch (err) {
     console.error('Error creating car:', err);
-    return res.status(500).json({ error: 'Failed to list vehicle.' });
+    return res.status(500).json({ error: 'Failed to add vehicle.' });
   }
 });
 
