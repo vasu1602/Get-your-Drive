@@ -64,8 +64,8 @@ const App = {
     // Sync Bookings with Backend API
     try {
       const bData = await Api.getBookings();
-      if (bData && bData.bookings && bData.bookings.length > 0) {
-        this.state.bookings = bData.bookings;
+      if (bData && Array.isArray(bData.bookings)) {
+        this.state.bookings = bData.bookings.filter(b => b.id !== 'BK-1092');
         this.saveBookings();
         this.updateCounters();
       }
@@ -80,26 +80,14 @@ const App = {
     const savedCars = localStorage.getItem('apex_cars');
     this.state.cars = savedCars ? JSON.parse(savedCars) : [...DEFAULT_CARS];
 
-    // Load Bookings
+    // Load Bookings (Starts at 0, only added when a user reserves a vehicle)
     const savedBookings = localStorage.getItem('apex_bookings');
-    this.state.bookings = savedBookings ? JSON.parse(savedBookings) : [
-      {
-        id: 'BK-1092',
-        carName: 'Tesla Model 3 Long Range',
-        carImage: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&w=800&q=80',
-        pickupDate: '2026-08-22',
-        returnDate: '2026-08-25',
-        days: 3,
-        totalPrice: 237,
-        location: 'Downtown Center (Main Station)',
-        driverName: 'Alex Vance',
-        status: 'Confirmed'
-      }
-    ];
+    this.state.bookings = savedBookings ? JSON.parse(savedBookings).filter(b => b.id !== 'BK-1092') : [];
+    this.saveBookings();
 
-    // Load Wishlist
+    // Load Wishlist (Starts clean)
     const savedWishlist = localStorage.getItem('apex_wishlist');
-    this.state.wishlist = savedWishlist ? new Set(JSON.parse(savedWishlist)) : new Set(['car-1']);
+    this.state.wishlist = savedWishlist ? new Set(JSON.parse(savedWishlist)) : new Set();
   },
 
   saveCars() {

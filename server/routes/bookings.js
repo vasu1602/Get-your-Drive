@@ -5,25 +5,7 @@ const Booking = require('../models/Booking');
 const FirebaseDB = require('../firebaseDb');
 const { optionalAuth, authenticateToken } = require('../middleware/auth');
 
-// Initial default booking
-const DEFAULT_BOOKING = {
-  id: 'BK-1092',
-  carName: 'Tesla Model 3 Long Range',
-  carImage: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&w=800&q=80',
-  pickupDate: '2026-08-22',
-  returnDate: '2026-08-25',
-  days: 3,
-  totalPrice: 237,
-  location: 'Downtown Center (Main Station)',
-  driverName: 'Alex Vance',
-  driverEmail: 'alex.vance@example.com',
-  status: 'Confirmed',
-  userId: 'user-demo'
-};
-
-fallbackStore.bookings.set(DEFAULT_BOOKING.id, DEFAULT_BOOKING);
-
-// GET /api/bookings -> Get bookings (all or user-specific)
+// GET /api/bookings -> Get bookings (user-specific or empty for guests)
 router.get('/', optionalAuth, async (req, res) => {
   try {
     let bookings = [];
@@ -33,15 +15,23 @@ router.get('/', optionalAuth, async (req, res) => {
           $or: [{ userId: req.user.id }, { driverEmail: req.user.email }]
         }).sort({ createdAt: -1 });
       } else {
-        bookings = await Booking.find().sort({ createdAt: -1 });
+        bookings = [];
       }
     } else {
-      bookings = Array.from(fallbackStore.bookings.values());
       if (req.user) {
-        bookings = bookings.filter(b => b.userId === req.user.id || b.driverEmail === req.user.email);
+        bookings = Array.from(fallbackStore.bookings.values()).filter(
+          b => (b.userId && b.userId === req.user.id) || (b.driverEmail && b.driverEmail === req.user.email)
+        );
+      } else {
+        bookings = [];
       }
     }
-    return res.status(200).json({ bookings });
+
+    return res.status(200).json({
+      success: true,
+      count: bookings.length,
+      bookings
+    });
   } catch (err) {
     console.error('Error fetching bookings:', err);
     return res.status(500).json({ error: 'Failed to fetch bookings.' });
