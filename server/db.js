@@ -1,4 +1,12 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Configure public DNS for MongoDB Atlas SRV lookup reliability
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  // Ignore in environments where custom DNS servers cannot be set
+}
 
 let isMongoConnected = false;
 
@@ -14,9 +22,10 @@ async function connectDB() {
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/getyourdrive';
   
   try {
-    console.log(`Attempting to connect to MongoDB at: ${uri}`);
+    const maskedUri = uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+    console.log(`Attempting to connect to MongoDB at: ${maskedUri}`);
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2500 // Don't hang on offline MongoDB
+      serverSelectionTimeoutMS: 5000
     });
     isMongoConnected = true;
     console.log('✅ Connected to MongoDB Database successfully.');
@@ -30,7 +39,7 @@ async function connectDB() {
 function getStatus() {
   return {
     isMongoConnected,
-    mode: isMongoConnected ? 'MongoDB (Mongoose)' : 'Resilient In-Memory Database'
+    mode: isMongoConnected ? 'MongoDB (Atlas Cloud)' : 'Resilient In-Memory Database'
   };
 }
 
