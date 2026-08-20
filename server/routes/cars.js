@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { isMongoConnected, fallbackStore } = require('../db');
 const Car = require('../models/Car');
+const FirebaseDB = require('../firebaseDb');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 
 // Default initial fleet
@@ -185,6 +186,9 @@ router.post('/', optionalAuth, async (req, res) => {
       createdCar = newCarData;
     }
 
+    // Sync to Firebase Realtime Database
+    FirebaseDB.saveCar(createdCar).catch(e => console.warn('Firebase RTDB car sync:', e.message));
+
     return res.status(201).json({
       success: true,
       message: 'Vehicle listed successfully!',
@@ -229,6 +233,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     } else {
       fallbackStore.cars.delete(carId);
     }
+
+    // Sync deletion to Firebase Realtime Database
+    FirebaseDB.deleteCar(carId).catch(e => console.warn('Firebase RTDB car delete sync:', e.message));
 
     return res.status(200).json({
       success: true,

@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const { isMongoConnected, fallbackStore } = require('../db');
 const User = require('../models/User');
 const OtpToken = require('../models/OtpToken');
+const FirebaseDB = require('../firebaseDb');
 const { authenticateToken, optionalAuth, JWT_SECRET } = require('../middleware/auth');
 
 const JWT_VERIFY_SECRET = process.env.JWT_VERIFY_SECRET || 'get_your_drive_otp_verification_secret_key_2026_v91b!';
@@ -380,6 +381,9 @@ router.post('/set-password', async (req, res) => {
       { expiresIn: '30d' }
     );
 
+    // Sync to Firebase Realtime Database
+    FirebaseDB.saveUser(savedUser).catch(e => console.warn('Firebase RTDB user sync:', e.message));
+
     return res.status(201).json({
       success: true,
       message: 'Account setup successfully! Welcome to Get Your Drive.',
@@ -424,6 +428,9 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ error: 'Incorrect password. Please try again or use "Forgot Password".' });
     }
+
+    // Sync to Firebase Realtime Database
+    FirebaseDB.saveUser(user).catch(e => console.warn('Firebase RTDB user sync:', e.message));
 
     const sessionToken = jwt.sign(
       {
@@ -573,6 +580,9 @@ router.put('/profile', optionalAuth, async (req, res) => {
     } else {
       return res.status(404).json({ error: 'User profile not found. Please log in.' });
     }
+
+    // Sync to Firebase Realtime Database
+    FirebaseDB.saveUser(user).catch(e => console.warn('Firebase RTDB profile sync:', e.message));
 
     return res.status(200).json({
       success: true,

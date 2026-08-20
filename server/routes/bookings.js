@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { isMongoConnected, fallbackStore } = require('../db');
 const Booking = require('../models/Booking');
+const FirebaseDB = require('../firebaseDb');
 const { optionalAuth, authenticateToken } = require('../middleware/auth');
 
 // Initial default booking
@@ -82,6 +83,9 @@ router.post('/', optionalAuth, async (req, res) => {
       createdBooking = newBooking;
     }
 
+    // Sync to Firebase Realtime Database
+    FirebaseDB.saveBooking(createdBooking).catch(e => console.warn('Firebase RTDB booking sync:', e.message));
+
     return res.status(201).json({
       success: true,
       message: 'Reservation created successfully!',
@@ -109,6 +113,9 @@ router.delete('/:id', async (req, res) => {
       }
       fallbackStore.bookings.delete(bookingId);
     }
+
+    // Sync deletion to Firebase Realtime Database
+    FirebaseDB.deleteBooking(bookingId).catch(e => console.warn('Firebase RTDB booking delete sync:', e.message));
 
     return res.status(200).json({
       success: true,

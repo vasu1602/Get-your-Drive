@@ -1,168 +1,114 @@
 // =============================================================================
-// FIREBASE CONFIGURATION & AUTHENTICATION MODULE
-// Replace the placeholder values below with your Firebase Project credentials!
-// Get your config from: Firebase Console -> Project Settings -> General -> Your apps
+// FIREBASE REALTIME DATABASE & AUTHENTICATION MODULE
+// Live Realtime Database: https://getyourdrive-148f5-default-rtdb.firebaseio.com
 // =============================================================================
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdef123456"
+  projectId: "getyourdrive-148f5",
+  databaseURL: "https://getyourdrive-148f5-default-rtdb.firebaseio.com",
+  authDomain: "getyourdrive-148f5.firebaseapp.com"
 };
 
-const FirebaseAuth = {
-  auth: null,
-  currentUser: null,
-  isDemoMode: false,
-  listeners: new Set(),
-
+const FirebaseRTDB = {
+  db: null,
+  
   init() {
-    // Check if real Firebase config is provided
-    const isRealConfig = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_API_KEY");
-
-    if (isRealConfig && typeof firebase !== 'undefined') {
+    if (typeof firebase !== 'undefined') {
       try {
         if (!firebase.apps.length) {
           firebase.initializeApp(firebaseConfig);
         }
-        this.auth = firebase.auth();
-        this.auth.onAuthStateChanged((user) => {
-          this.currentUser = user ? {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || user.email.split('@')[0],
-            photoURL: user.photoURL || null
-          } : null;
-          this.notify();
-        });
-        console.log("Firebase Auth initialized successfully.");
+        this.db = firebase.database();
+        console.log("🔥 Firebase Realtime Database connected:", firebaseConfig.databaseURL);
       } catch (err) {
-        console.warn("Failed to initialize Firebase SDK, falling back to Demo Auth:", err);
-        this.initDemoMode();
-      }
-    } else {
-      this.initDemoMode();
-    }
-  },
-
-  initDemoMode() {
-    this.isDemoMode = true;
-    console.log("Firebase Auth running in Demo/Offline mode. Add your Firebase keys in js/firebase.js to connect live.");
-    
-    // Check if user was saved in local storage
-    const savedDemoUser = localStorage.getItem('apex_auth_user');
-    if (savedDemoUser) {
-      try {
-        this.currentUser = JSON.parse(savedDemoUser);
-      } catch (e) {
-        this.currentUser = null;
+        console.warn("Firebase RTDB init note:", err.message);
       }
     }
-    this.notify();
   },
 
-  onAuthStateChanged(callback) {
-    this.listeners.add(callback);
-    callback(this.currentUser);
-    return () => this.listeners.delete(callback);
+  sanitizeKey(email) {
+    if (!email) return 'anonymous';
+    return String(email).toLowerCase().replace(/[.@#$\[\]\/]/g, '_');
   },
 
-  notify() {
-    for (const listener of this.listeners) {
-      listener(this.currentUser);
-    }
-  },
-
-  getCurrentUser() {
-    return this.currentUser;
-  },
-
-  // 1. Sign In with Email & Password
-  async signIn(email, password) {
-    if (!email || !password) {
-      throw new Error("Please provide both email and password.");
-    }
-
-    if (!this.isDemoMode && this.auth) {
-      const userCredential = await this.auth.signInWithEmailAndPassword(email, password);
-      return userCredential.user;
-    } else {
-      // Demo authentication simulation
-      const user = {
-        uid: 'user-' + btoa(email).replace(/=/g, '').substring(0, 10),
-        email: email,
-        displayName: email.split('@')[0],
-        photoURL: null
-      };
-      this.currentUser = user;
-      localStorage.setItem('apex_auth_user', JSON.stringify(user));
-      this.notify();
-      return user;
+  // Real-time save user profile & presence
+  saveUser(user) {
+    if (!user || !user.email) return;
+    const key = this.sanitizeKey(user.email);
+    const data = {
+      id: String(user.id || user._id || key),
+      email: user.email.toLowerCase().trim(),
+      name: user.name || user.email.split('@')[0],
+      photoURL: user.photoURL || '',
+      role: user.role || 'user',
+      isEmailVerified: true,
+      lastActive: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (this.db) {
+      this.db.ref('users/' + key).update(data);
+      this.logActivity('USER_LOGIN', `User signed in: ${user.email}`);
     }
   },
 
-  // 2. Register / Sign Up with Email & Password
-  async signUp(email, password, displayName) {
-    if (!email || !password) {
-      throw new Error("Please provide email and password.");
-    }
-    if (password.length < 6) {
-      throw new Error("Password must be at least 6 characters.");
-    }
-
-    if (!this.isDemoMode && this.auth) {
-      const userCredential = await this.auth.createUserWithEmailAndPassword(email, password);
-      if (displayName && userCredential.user.updateProfile) {
-        await userCredential.user.updateProfile({ displayName });
-      }
-      return userCredential.user;
-    } else {
-      // Demo registration simulation
-      const user = {
-        uid: 'user-' + Date.now(),
-        email: email,
-        displayName: displayName || email.split('@')[0],
-        photoURL: null
-      };
-      this.currentUser = user;
-      localStorage.setItem('apex_auth_user', JSON.stringify(user));
-      this.notify();
-      return user;
+  // Real-time save booking
+  saveBooking(booking) {
+    if (!booking || !booking.id) return;
+    if (this.db) {
+      this.db.ref('bookings/' + booking.id).set({
+        ...booking,
+        updatedAt: new Date().toISOString()
+      });
+      this.logActivity('BOOKING_CREATED', `Reservation #${booking.id} created for ${booking.carName}`);
     }
   },
 
-  // 3. Sign In with Google
-  async signInWithGoogle() {
-    if (!this.isDemoMode && this.auth && typeof firebase !== 'undefined') {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      const result = await this.auth.signInWithPopup(provider);
-      return result.user;
-    } else {
-      // Demo Google Sign-In simulation
-      const user = {
-        uid: 'google-user-' + Math.floor(1000 + Math.random() * 9000),
-        email: 'alex.google@example.com',
-        displayName: 'Alex Google User',
-        photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
-      };
-      this.currentUser = user;
-      localStorage.setItem('apex_auth_user', JSON.stringify(user));
-      this.notify();
-      return user;
+  // Real-time delete booking
+  deleteBooking(bookingId) {
+    if (!bookingId) return;
+    if (this.db) {
+      this.db.ref('bookings/' + bookingId).remove();
+      this.logActivity('BOOKING_CANCELLED', `Reservation #${bookingId} cancelled`);
     }
   },
 
-  // 4. Sign Out
-  async signOut() {
-    if (!this.isDemoMode && this.auth) {
-      await this.auth.signOut();
-    } else {
-      this.currentUser = null;
-      localStorage.removeItem('apex_auth_user');
-      this.notify();
+  // Real-time save car
+  saveCar(car) {
+    if (!car || !car.id) return;
+    if (this.db) {
+      this.db.ref('cars/' + car.id).set({
+        ...car,
+        updatedAt: new Date().toISOString()
+      });
+      this.logActivity('CAR_ADDED', `Vehicle listed: ${car.name}`);
     }
+  },
+
+  // Real-time delete car
+  deleteCar(carId) {
+    if (!carId) return;
+    if (this.db) {
+      this.db.ref('cars/' + carId).remove();
+      this.logActivity('CAR_REMOVED', `Vehicle removed from fleet: ${carId}`);
+    }
+  },
+
+  // Real-time audit log
+  logActivity(type, message) {
+    if (!this.db) return;
+    const actId = 'act_' + Date.now();
+    this.db.ref('activity/' + actId).set({
+      id: actId,
+      type,
+      message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
+
+// Initialize client-side Realtime Database immediately
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    FirebaseRTDB.init();
+  });
+}
