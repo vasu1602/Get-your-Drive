@@ -15,18 +15,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Connect to DB (cached across warm lambda invocations)
-let dbPromise = null;
+// Connect to DB for serverless lambda execution
 app.use(async (req, res, next) => {
-  if (!dbPromise) {
-    dbPromise = connectDB().catch(err => {
-      console.warn('DB connection error in serverless function:', err.message);
-    });
-  }
   try {
-    await dbPromise;
+    await connectDB();
   } catch (e) {
-    // Graceful fallback
+    console.warn('DB connection note in serverless function:', e.message);
   }
   next();
 });

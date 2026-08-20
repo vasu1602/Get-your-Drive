@@ -149,6 +149,25 @@ const FirebaseDB = {
       timestamp: new Date().toISOString()
     };
     await rtdbRequest(`/activity/${actId}`, 'PUT', item);
+  },
+
+  // OTP Tokens for Instant Cross-Serverless Lambda Persistence
+  async saveOtp(email, data) {
+    if (!email) return;
+    const key = sanitizeKey(email);
+    await rtdbRequest(`/otptokens/${key}`, 'PUT', data);
+  },
+
+  async getOtp(email) {
+    if (!email) return null;
+    const key = sanitizeKey(email);
+    return rtdbRequest(`/otptokens/${key}`, 'GET');
+  },
+
+  async deleteOtp(email) {
+    if (!email) return;
+    const key = sanitizeKey(email);
+    await rtdbRequest(`/otptokens/${key}`, 'DELETE');
   }
 };
 

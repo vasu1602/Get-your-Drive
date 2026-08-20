@@ -167,6 +167,17 @@ router.post('/request-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     // Save to Database (MongoDB or Fallback Store)
+    const otpData = {
+      email: cleanEmail,
+      otpHash,
+      expiresAt: expiresAt.getTime(),
+      attempts: 0,
+      name: name ? name.trim() : ''
+    };
+
+    // Save to Database (Firebase RTDB, MongoDB, and Fallback Store)
+    FirebaseDB.saveOtp(cleanEmail, otpData).catch(e => console.warn('Firebase RTDB OTP save note:', e.message));
+
     if (isMongoConnected()) {
       await OtpToken.deleteMany({ email: cleanEmail });
       await OtpToken.create({
@@ -177,13 +188,7 @@ router.post('/request-otp', async (req, res) => {
         name: name ? name.trim() : ''
       });
     } else {
-      fallbackStore.otpTokens.set(cleanEmail, {
-        email: cleanEmail,
-        otpHash,
-        expiresAt: expiresAt.getTime(),
-        attempts: 0,
-        name: name ? name.trim() : ''
-      });
+      fallbackStore.otpTokens.set(cleanEmail, otpData);
     }
 
     console.log(`\n======================================================`);
@@ -229,7 +234,11 @@ router.post('/verify-otp', async (req, res) => {
     let otpRecord = null;
     if (isMongoConnected()) {
       otpRecord = await OtpToken.findOne({ email: cleanEmail });
-    } else {
+    }
+    if (!otpRecord) {
+      otpRecord = await FirebaseDB.getOtp(cleanEmail);
+    }
+    if (!otpRecord) {
       otpRecord = fallbackStore.otpTokens.get(cleanEmail);
     }
 
@@ -242,7 +251,8 @@ router.post('/verify-otp', async (req, res) => {
     const expiryTime = otpRecord.expiresAt instanceof Date ? otpRecord.expiresAt.getTime() : new Date(otpRecord.expiresAt).getTime();
     if (Date.now() > expiryTime) {
       if (isMongoConnected()) await OtpToken.deleteMany({ email: cleanEmail });
-      else fallbackStore.otpTokens.delete(cleanEmail);
+      FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
+      fallbackStore.otpTokens.delete(cleanEmail);
 
       return res.status(400).json({
         error: 'Verification code has expired. Please request a new one.'
@@ -252,7 +262,8 @@ router.post('/verify-otp', async (req, res) => {
     // Rate Limiting on failed attempts
     if (otpRecord.attempts >= OTP_MAX_ATTEMPTS) {
       if (isMongoConnected()) await OtpToken.deleteMany({ email: cleanEmail });
-      else fallbackStore.otpTokens.delete(cleanEmail);
+      FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
+      fallbackStore.otpTokens.delete(cleanEmail);
 
       return res.status(429).json({
         error: 'Maximum verification attempts exceeded. Please request a new code.'
@@ -279,9 +290,9 @@ router.post('/verify-otp', async (req, res) => {
     const verifiedName = otpRecord.name || '';
     if (isMongoConnected()) {
       await OtpToken.deleteMany({ email: cleanEmail });
-    } else {
-      fallbackStore.otpTokens.delete(cleanEmail);
     }
+    FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
+    fallbackStore.otpTokens.delete(cleanEmail);
 
     // Generate short-lived Verification Token (15-min expiry)
     const verificationToken = jwt.sign(
@@ -702,7 +713,17 @@ router.post('/forgot-password/request-otp', async (req, res) => {
     const otpHash = hashOtp(otp);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Save OTP to DB
+    const otpData = {
+      email: cleanEmail,
+      otpHash,
+      expiresAt: expiresAt.getTime(),
+      attempts: 0,
+      name: user.name
+    };
+
+    // Save OTP to DB (Firebase RTDB, MongoDB, Fallback Store)
+    FirebaseDB.saveOtp(cleanEmail, otpData).catch(e => console.warn('Firebase RTDB OTP save note:', e.message));
+
     if (isMongoConnected()) {
       await OtpToken.deleteMany({ email: cleanEmail });
       await OtpToken.create({
@@ -713,13 +734,7 @@ router.post('/forgot-password/request-otp', async (req, res) => {
         name: user.name
       });
     } else {
-      fallbackStore.otpTokens.set(cleanEmail, {
-        email: cleanEmail,
-        otpHash,
-        expiresAt: expiresAt.getTime(),
-        attempts: 0,
-        name: user.name
-      });
+      fallbackStore.otpTokens.set(cleanEmail, otpData);
     }
 
     console.log(`\n======================================================`);
@@ -764,7 +779,11 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
     let record = null;
     if (isMongoConnected()) {
       record = await OtpToken.findOne({ email: cleanEmail });
-    } else {
+    }
+    if (!record) {
+      record = await FirebaseDB.getOtp(cleanEmail);
+    }
+    if (!record) {
       record = fallbackStore.otpTokens.get(cleanEmail);
     }
 
@@ -787,7 +806,8 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
 
     // Invalidate OTP
     if (isMongoConnected()) await OtpToken.deleteOne({ _id: record._id });
-    else fallbackStore.otpTokens.delete(cleanEmail);
+    FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
+    fallbackStore.otpTokens.delete(cleanEmail);
 
     // Issue short-lived Reset Verification Token (15 mins)
     const resetToken = jwt.sign(
