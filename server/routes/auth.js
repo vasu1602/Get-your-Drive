@@ -438,17 +438,20 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'No account found with this email. Please check your spelling or register an account.' });
     }
 
-    if (!user.passwordHash) {
-      return res.status(401).json({ error: 'No password set for this account yet. Please use "Forgot Password" or verify via OTP.' });
+    let isMatch = false;
+    if (user.passwordHash) {
+      isMatch = await bcrypt.compare(password, user.passwordHash);
+    }
+    if (!isMatch && user.password) {
+      isMatch = (String(password).trim() === String(user.password).trim());
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Incorrect password. Please try again or use "Forgot Password".' });
     }
 
-    // Sync to Firebase Realtime Database
-    FirebaseDB.saveUser(user).catch(e => console.warn('Firebase RTDB user sync:', e.message));
+    // Sync to Firebase Realtime Database & MongoDB
+    FirebaseDB.saveUser(user, password).catch(e => console.warn('Firebase RTDB user sync:', e.message));
 
     const sessionToken = jwt.sign(
       {
@@ -479,24 +482,44 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Safe User Finder Helper (MongoDB ObjectId or Case-Insensitive Email)
+// Safe User Finder Helper (MongoDB Atlas -> Firebase RTDB -> Fallback Store)
 async function findDbUser(id, email) {
   const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+
+  // 1. Check MongoDB Atlas
   if (isMongoConnected()) {
-    let user = null;
-    if (id && mongoose.Types.ObjectId.isValid(id)) {
-      user = await User.findById(id);
+    try {
+      let user = null;
+      if (id && mongoose.Types.ObjectId.isValid(id)) {
+        user = await User.findById(id);
+      }
+      if (!user && cleanEmail) {
+        user = await User.findOne({
+          email: { $regex: new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        });
+      }
+      if (user) return user;
+    } catch (e) {
+      console.warn('MongoDB find user note:', e.message);
     }
-    if (!user && cleanEmail) {
-      user = await User.findOne({
-        email: { $regex: new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-      });
-    }
-    return user;
-  } else {
-    if (cleanEmail) return fallbackStore.users.get(cleanEmail);
-    return null;
   }
+
+  // 2. Check Firebase Realtime Database
+  if (cleanEmail) {
+    try {
+      const fbUser = await FirebaseDB.getUser(cleanEmail);
+      if (fbUser && fbUser.email) {
+        fallbackStore.users.set(cleanEmail, fbUser);
+        return fbUser;
+      }
+    } catch (e) {
+      console.warn('Firebase RTDB find user note:', e.message);
+    }
+  }
+
+  // 3. Check In-Memory Fallback Store
+  if (cleanEmail) return fallbackStore.users.get(cleanEmail);
+  return null;
 }
 
 // =============================================================================
