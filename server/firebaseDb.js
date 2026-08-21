@@ -153,6 +153,17 @@ const FirebaseDB = {
     return Object.values(data);
   },
 
+  async getUserBookings(userId, email) {
+    const all = await this.getAllBookings();
+    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const cleanId = userId ? String(userId) : null;
+    return all.filter(b => {
+      if (cleanId && String(b.userId) === cleanId) return true;
+      if (cleanEmail && b.driverEmail && b.driverEmail.toLowerCase().trim() === cleanEmail) return true;
+      return false;
+    });
+  },
+
   // Real-time Activity Log
   async logActivity(type, message, metadata = {}) {
     const actId = 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);

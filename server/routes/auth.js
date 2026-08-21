@@ -1,13 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const { isMongoConnected, fallbackStore } = require('../db');
-const User = require('../models/User');
-const OtpToken = require('../models/OtpToken');
+const { fallbackStore } = require('../db');
 const FirebaseDB = require('../firebaseDb');
 const { authenticateToken, optionalAuth, JWT_SECRET } = require('../middleware/auth');
 
@@ -124,10 +121,9 @@ async function sendVerificationEmail({ to, name, otp }) {
         subject: `${otp} is your Get Your Drive verification code`,
         html: htmlContent
       });
-      console.log(`✅ [Custom SMTP] Email delivered to ${to}`);
       return true;
     } catch (smtpErr) {
-      console.warn(`⚠️ [Custom SMTP Error]: ${smtpErr.message}`);
+      console.warn(`⚠️ [Custom SMTP Warning]: ${smtpErr.message}`);
     }
   }
 
@@ -148,13 +144,7 @@ router.post('/request-otp', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Check if user is already registered
-    let existingUser = null;
-    if (isMongoConnected()) {
-      existingUser = await User.findOne({ email: cleanEmail });
-    } else {
-      existingUser = fallbackStore.users.get(cleanEmail);
-    }
-
+    const existingUser = await findDbUser(null, cleanEmail);
     if (existingUser) {
       return res.status(400).json({
         error: 'An account with this email already exists. Please log in directly.'
@@ -166,7 +156,6 @@ router.post('/request-otp', async (req, res) => {
     const otpHash = hashOtp(otp);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Save to Database (MongoDB or Fallback Store)
     const otpData = {
       email: cleanEmail,
       otpHash,
@@ -175,21 +164,9 @@ router.post('/request-otp', async (req, res) => {
       name: name ? name.trim() : ''
     };
 
-    // Save to Database (Firebase RTDB, MongoDB, and Fallback Store)
-    FirebaseDB.saveOtp(cleanEmail, otpData).catch(e => console.warn('Firebase RTDB OTP save note:', e.message));
-
-    if (isMongoConnected()) {
-      await OtpToken.deleteMany({ email: cleanEmail });
-      await OtpToken.create({
-        email: cleanEmail,
-        otpHash,
-        expiresAt,
-        attempts: 0,
-        name: name ? name.trim() : ''
-      });
-    } else {
-      fallbackStore.otpTokens.set(cleanEmail, otpData);
-    }
+    // Save to Firebase RTDB and Fallback Store
+    fallbackStore.otpTokens.set(cleanEmail, otpData);
+    await FirebaseDB.saveOtp(cleanEmail, otpData);
 
     console.log(`\n======================================================`);
     console.log(`📧 [EMAIL DISPATCH] Sending 6-Digit OTP to: ${cleanEmail}`);
@@ -231,13 +208,7 @@ router.post('/verify-otp', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
-    let otpRecord = null;
-    if (isMongoConnected()) {
-      otpRecord = await OtpToken.findOne({ email: cleanEmail });
-    }
-    if (!otpRecord) {
-      otpRecord = await FirebaseDB.getOtp(cleanEmail);
-    }
+    let otpRecord = await FirebaseDB.getOtp(cleanEmail);
     if (!otpRecord) {
       otpRecord = fallbackStore.otpTokens.get(cleanEmail);
     }
@@ -250,7 +221,6 @@ router.post('/verify-otp', async (req, res) => {
 
     const expiryTime = otpRecord.expiresAt instanceof Date ? otpRecord.expiresAt.getTime() : new Date(otpRecord.expiresAt).getTime();
     if (Date.now() > expiryTime) {
-      if (isMongoConnected()) await OtpToken.deleteMany({ email: cleanEmail });
       FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
       fallbackStore.otpTokens.delete(cleanEmail);
 
@@ -261,7 +231,6 @@ router.post('/verify-otp', async (req, res) => {
 
     // Rate Limiting on failed attempts
     if (otpRecord.attempts >= OTP_MAX_ATTEMPTS) {
-      if (isMongoConnected()) await OtpToken.deleteMany({ email: cleanEmail });
       FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
       fallbackStore.otpTokens.delete(cleanEmail);
 
@@ -273,14 +242,11 @@ router.post('/verify-otp', async (req, res) => {
     // Check Hash
     const incomingHash = hashOtp(cleanOtp);
     if (incomingHash !== otpRecord.otpHash) {
-      // Increment attempt counter
-      if (isMongoConnected()) {
-        await OtpToken.updateOne({ _id: otpRecord._id }, { $inc: { attempts: 1 } });
-      } else {
-        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
-      }
+      otpRecord.attempts = (otpRecord.attempts || 0) + 1;
+      fallbackStore.otpTokens.set(cleanEmail, otpRecord);
+      FirebaseDB.saveOtp(cleanEmail, otpRecord).catch(() => {});
 
-      const remainingAttempts = OTP_MAX_ATTEMPTS - (otpRecord.attempts + 1);
+      const remainingAttempts = OTP_MAX_ATTEMPTS - (otpRecord.attempts);
       return res.status(400).json({
         error: `Invalid verification code. ${remainingAttempts > 0 ? `${remainingAttempts} attempt(s) remaining.` : 'Please request a new code.'}`
       });
@@ -288,9 +254,6 @@ router.post('/verify-otp', async (req, res) => {
 
     // Successful Verification -> Delete/Invalidate OTP Record
     const verifiedName = otpRecord.name || '';
-    if (isMongoConnected()) {
-      await OtpToken.deleteMany({ email: cleanEmail });
-    }
     FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
     fallbackStore.otpTokens.delete(cleanEmail);
 
@@ -308,7 +271,6 @@ router.post('/verify-otp', async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Email verified successfully! Please set your account password.',
-      email: cleanEmail,
       verificationToken
     });
   } catch (err) {
@@ -318,7 +280,7 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 // =============================================================================
-// STEP 3: SET PASSWORD & CREATE ACCOUNT
+// STEP 3: SET PASSWORD & CREATE ACCOUNT (Firebase Realtime Database)
 // =============================================================================
 router.post('/set-password', async (req, res) => {
   try {
@@ -353,44 +315,26 @@ router.post('/set-password', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    let savedUser;
-    if (isMongoConnected()) {
-      // Check if user already exists in Atlas
-      let existing = await User.findOne({ email });
-      if (existing) {
-        existing.passwordHash = passwordHash;
-        existing.name = finalName;
-        existing.isEmailVerified = true;
-        savedUser = await existing.save();
-        console.log(`✅ Updated existing user password in MongoDB Atlas for: ${email}`);
-      } else {
-        const newUser = new User({
-          email,
-          passwordHash,
-          name: finalName,
-          role: 'user',
-          isEmailVerified: true
-        });
-        savedUser = await newUser.save();
-        console.log(`✅ Created brand new user in MongoDB Atlas: ${email}`);
-      }
-    } else {
-      savedUser = {
-        _id: 'user_' + Date.now(),
-        email,
-        passwordHash,
-        name: finalName,
-        role: 'user',
-        isEmailVerified: true,
-        createdAt: new Date()
-      };
-      fallbackStore.users.set(email, savedUser);
-    }
+    const savedUser = {
+      id: 'user_' + Date.now(),
+      email,
+      password: String(password),
+      passwordHash,
+      name: finalName,
+      role: 'user',
+      isEmailVerified: true,
+      photoURL: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    fallbackStore.users.set(email, savedUser);
+    await FirebaseDB.saveUser(savedUser, password);
 
     // Issue standard Session JWT Token (30-day validity)
     const sessionToken = jwt.sign(
       {
-        id: String(savedUser._id || savedUser.id),
+        id: String(savedUser.id),
         email: savedUser.email,
         name: savedUser.name,
         role: savedUser.role
@@ -399,15 +343,12 @@ router.post('/set-password', async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    // Sync to Firebase Realtime Database with password persistence
-    FirebaseDB.saveUser(savedUser, password).catch(e => console.warn('Firebase RTDB user sync:', e.message));
-
     return res.status(201).json({
       success: true,
       message: 'Account setup successfully! Welcome to Get Your Drive.',
       token: sessionToken,
       user: {
-        id: String(savedUser._id || savedUser.id),
+        id: String(savedUser.id),
         email: savedUser.email,
         name: savedUser.name,
         photoURL: savedUser.photoURL || '',
@@ -421,7 +362,7 @@ router.post('/set-password', async (req, res) => {
 });
 
 // =============================================================================
-// LOGIN WITH EMAIL & PASSWORD
+// LOGIN (EMAIL & PASSWORD) -> Authenticates with Firebase Realtime Database
 // =============================================================================
 router.post('/login', async (req, res) => {
   try {
@@ -450,7 +391,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect password. Please try again or use "Forgot Password".' });
     }
 
-    // Sync to Firebase Realtime Database & MongoDB
+    // Sync to Firebase Realtime Database
     FirebaseDB.saveUser(user, password).catch(e => console.warn('Firebase RTDB user sync:', e.message));
 
     const sessionToken = jwt.sign(
@@ -482,29 +423,11 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Safe User Finder Helper (MongoDB Atlas -> Firebase RTDB -> Fallback Store)
+// Safe User Finder Helper (Firebase Realtime Database -> In-Memory Fallback)
 async function findDbUser(id, email) {
   const cleanEmail = email ? String(email).trim().toLowerCase() : null;
 
-  // 1. Check MongoDB Atlas
-  if (isMongoConnected()) {
-    try {
-      let user = null;
-      if (id && mongoose.Types.ObjectId.isValid(id)) {
-        user = await User.findById(id);
-      }
-      if (!user && cleanEmail) {
-        user = await User.findOne({
-          email: { $regex: new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-        });
-      }
-      if (user) return user;
-    } catch (e) {
-      console.warn('MongoDB find user note:', e.message);
-    }
-  }
-
-  // 2. Check Firebase Realtime Database
+  // 1. Check Firebase Realtime Database
   if (cleanEmail) {
     try {
       const fbUser = await FirebaseDB.getUser(cleanEmail);
@@ -517,13 +440,13 @@ async function findDbUser(id, email) {
     }
   }
 
-  // 3. Check In-Memory Fallback Store
+  // 2. Check In-Memory Fallback Store
   if (cleanEmail) return fallbackStore.users.get(cleanEmail);
   return null;
 }
 
 // =============================================================================
-// GET CURRENT USER PROFILE (Persistent Session Sync & Atlas Auto-Sync)
+// GET CURRENT USER PROFILE
 // =============================================================================
 router.get('/me', optionalAuth, async (req, res) => {
   try {
@@ -531,28 +454,10 @@ router.get('/me', optionalAuth, async (req, res) => {
     const targetId = req.user && req.user.id;
     let user = await findDbUser(targetId, targetEmail);
 
-    if (!user && targetEmail && isMongoConnected()) {
-      try {
-        const dummyHash = await bcrypt.hash('password123', 10);
-        user = new User({
-          email: String(targetEmail).toLowerCase().trim(),
-          name: req.user?.name || targetEmail.split('@')[0],
-          photoURL: '',
-          passwordHash: dummyHash,
-          isEmailVerified: true
-        });
-        await user.save();
-        console.log(`✅ Synced user ${targetEmail} into MongoDB Atlas Cloud!`);
-      } catch (upsertErr) {
-        console.warn('User auto-sync note:', upsertErr.message);
-      }
-    }
-
     if (!user) {
       return res.status(404).json({ error: 'User profile not found.' });
     }
 
-    // Issue refreshed 30-day session token so login never drops
     const refreshedToken = jwt.sign(
       {
         id: String(user._id || user.id),
@@ -582,7 +487,7 @@ router.get('/me', optionalAuth, async (req, res) => {
 });
 
 // =============================================================================
-// UPDATE PROFILE (Name & Avatar - Live Sync to MongoDB Atlas)
+// UPDATE PROFILE (Name & Avatar in Firebase Realtime Database)
 // =============================================================================
 router.put('/profile', optionalAuth, async (req, res) => {
   try {
@@ -598,32 +503,24 @@ router.put('/profile', optionalAuth, async (req, res) => {
 
     let user = await findDbUser(targetId, targetEmail);
 
-    if (!user && targetEmail && isMongoConnected()) {
-      // Auto-create in MongoDB Atlas if user account was created earlier locally
-      const dummyHash = await bcrypt.hash('password123', 10);
-      user = new User({
+    if (!user && targetEmail) {
+      user = {
+        id: 'user_' + Date.now(),
         email: targetEmail,
         name: cleanName,
         photoURL: photoURL ? String(photoURL).trim() : '',
-        passwordHash: dummyHash,
+        role: 'user',
         isEmailVerified: true
-      });
-      await user.save();
-      console.log(`✅ Saved new user profile ${targetEmail} into MongoDB Atlas!`);
+      };
     } else if (user) {
       user.name = cleanName;
       if (photoURL !== undefined) user.photoURL = String(photoURL).trim();
-
-      if (isMongoConnected()) {
-        await user.save();
-        console.log(`✅ Updated user profile ${user.email} in MongoDB Atlas!`);
-      }
     } else {
       return res.status(404).json({ error: 'User profile not found. Please log in.' });
     }
 
-    // Sync to Firebase Realtime Database
-    FirebaseDB.saveUser(user).catch(e => console.warn('Firebase RTDB profile sync:', e.message));
+    fallbackStore.users.set(targetEmail, user);
+    await FirebaseDB.saveUser(user);
 
     return res.status(200).json({
       success: true,
@@ -643,7 +540,7 @@ router.put('/profile', optionalAuth, async (req, res) => {
 });
 
 // =============================================================================
-// CHANGE PASSWORD (Verify Current Password First)
+// CHANGE PASSWORD
 // =============================================================================
 router.post('/change-password', optionalAuth, async (req, res) => {
   try {
@@ -666,8 +563,15 @@ router.post('/change-password', optionalAuth, async (req, res) => {
       return res.status(401).json({ error: 'Session expired or user not found. Please sign in again.' });
     }
 
-    // Verify current password with bcrypt
-    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    // Verify current password with bcrypt or direct match
+    let isMatch = false;
+    if (user.passwordHash) {
+      isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    }
+    if (!isMatch && user.password) {
+      isMatch = (String(currentPassword).trim() === String(user.password).trim());
+    }
+
     if (!isMatch) {
       return res.status(400).json({
         error: 'Current password is incorrect. If you forgot your password, please use the OTP reset option.'
@@ -678,12 +582,11 @@ router.post('/change-password', optionalAuth, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const newPasswordHash = await bcrypt.hash(newPassword, salt);
 
+    user.password = newPassword;
     user.passwordHash = newPasswordHash;
-    if (isMongoConnected()) {
-      await user.save();
-    }
+    fallbackStore.users.set(targetEmail, user);
+    await FirebaseDB.saveUser(user, newPassword);
 
-    // Issue updated session token
     const sessionToken = jwt.sign(
       {
         id: String(user._id || user.id),
@@ -698,7 +601,14 @@ router.post('/change-password', optionalAuth, async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Your password has been changed successfully!',
-      token: sessionToken
+      token: sessionToken,
+      user: {
+        id: String(user._id || user.id),
+        email: user.email,
+        name: user.name,
+        photoURL: user.photoURL || '',
+        role: user.role
+      }
     });
   } catch (err) {
     console.error('Error in /change-password:', err);
@@ -718,20 +628,12 @@ router.post('/forgot-password/request-otp', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-
-    // Check if user exists
-    let user = null;
-    if (isMongoConnected()) {
-      user = await User.findOne({ email: cleanEmail });
-    } else {
-      user = fallbackStore.users.get(cleanEmail);
-    }
+    const user = await findDbUser(null, cleanEmail);
 
     if (!user) {
       return res.status(404).json({ error: 'No account registered with this email address.' });
     }
 
-    // Generate secure 6-digit OTP
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = hashOtp(otp);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -744,21 +646,8 @@ router.post('/forgot-password/request-otp', async (req, res) => {
       name: user.name
     };
 
-    // Save OTP to DB (Firebase RTDB, MongoDB, Fallback Store)
-    FirebaseDB.saveOtp(cleanEmail, otpData).catch(e => console.warn('Firebase RTDB OTP save note:', e.message));
-
-    if (isMongoConnected()) {
-      await OtpToken.deleteMany({ email: cleanEmail });
-      await OtpToken.create({
-        email: cleanEmail,
-        otpHash,
-        expiresAt,
-        attempts: 0,
-        name: user.name
-      });
-    } else {
-      fallbackStore.otpTokens.set(cleanEmail, otpData);
-    }
+    fallbackStore.otpTokens.set(cleanEmail, otpData);
+    await FirebaseDB.saveOtp(cleanEmail, otpData);
 
     console.log(`\n======================================================`);
     console.log(`🔑 [PASSWORD RESET OTP] Sending to: ${cleanEmail}`);
@@ -766,7 +655,6 @@ router.post('/forgot-password/request-otp', async (req, res) => {
     console.log(`⏱️  Expires at: ${expiresAt.toLocaleTimeString()}`);
     console.log(`======================================================\n`);
 
-    // Dispatch email
     await sendVerificationEmail({
       to: cleanEmail,
       name: user.name,
@@ -799,13 +687,7 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
-    let record = null;
-    if (isMongoConnected()) {
-      record = await OtpToken.findOne({ email: cleanEmail });
-    }
-    if (!record) {
-      record = await FirebaseDB.getOtp(cleanEmail);
-    }
+    let record = await FirebaseDB.getOtp(cleanEmail);
     if (!record) {
       record = fallbackStore.otpTokens.get(cleanEmail);
     }
@@ -814,11 +696,10 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'No active reset request found. Please request a new code.' });
     }
 
-    const now = Date.now();
     const expiryTime = record.expiresAt instanceof Date ? record.expiresAt.getTime() : new Date(record.expiresAt).getTime();
-    if (now > expiryTime) {
-      if (isMongoConnected()) await OtpToken.deleteOne({ _id: record._id });
-      else fallbackStore.otpTokens.delete(cleanEmail);
+    if (Date.now() > expiryTime) {
+      FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
+      fallbackStore.otpTokens.delete(cleanEmail);
       return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
     }
 
@@ -828,11 +709,9 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
     }
 
     // Invalidate OTP
-    if (isMongoConnected()) await OtpToken.deleteOne({ _id: record._id });
     FirebaseDB.deleteOtp(cleanEmail).catch(() => {});
     fallbackStore.otpTokens.delete(cleanEmail);
 
-    // Issue short-lived Reset Verification Token (15 mins)
     const resetToken = jwt.sign(
       {
         email: cleanEmail,
@@ -868,7 +747,6 @@ router.post('/forgot-password/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
-    // Verify token
     let decoded;
     try {
       decoded = jwt.verify(resetToken, JWT_VERIFY_SECRET);
@@ -881,26 +759,16 @@ router.post('/forgot-password/reset-password', async (req, res) => {
     }
 
     const cleanEmail = decoded.email.toLowerCase();
-
-    // Hash new password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
-    let updatedUser = null;
-    if (isMongoConnected()) {
-      const user = await User.findOne({ email: cleanEmail });
-      if (!user) return res.status(404).json({ error: 'User account not found.' });
-      user.passwordHash = passwordHash;
-      updatedUser = await user.save();
-    } else {
-      const user = fallbackStore.users.get(cleanEmail);
-      if (!user) return res.status(404).json({ error: 'User account not found.' });
-      user.passwordHash = passwordHash;
-      updatedUser = user;
-    }
+    let user = await findDbUser(null, cleanEmail);
+    if (!user) return res.status(404).json({ error: 'User account not found.' });
 
-    // Sync updated password to Firebase Realtime Database
-    FirebaseDB.saveUser(updatedUser, newPassword).catch(e => console.warn('Firebase RTDB reset sync note:', e.message));
+    user.password = newPassword;
+    user.passwordHash = passwordHash;
+    fallbackStore.users.set(cleanEmail, user);
+    await FirebaseDB.saveUser(user, newPassword);
 
     return res.status(200).json({
       success: true,

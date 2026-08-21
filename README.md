@@ -6,11 +6,11 @@
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express.js](https://img.shields.io/badge/Express.js-Backend_API-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com)
 [![Firebase](https://img.shields.io/badge/Firebase-Realtime_Database-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
-[![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas_Cloud-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![Netlify](https://img.shields.io/badge/Netlify-Serverless_Functions-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://www.netlify.com)
 
 **Fast, Simple & Verified Luxury Car Rentals**
 
-*A modern full-stack web application featuring rich glassmorphism design, real-time Firebase Realtime Database synchronization, MongoDB Atlas cloud persistence, Resend.com 6-digit OTP verification, interactive photo cropping, dynamic fleet management, and instant booking workflows.*
+*A modern full-stack web application featuring rich glassmorphism design, real-time Firebase Realtime Database cloud synchronization, Resend.com 6-digit OTP email verification, interactive HTML5 Canvas photo cropping, dynamic fleet management, and instant booking workflows.*
 
 [Explore Live Demo](https://get-your-drive.netlify.app) • [View API Routes](#-api-endpoints) • [Quick Start](#-quick-start--installation)
 
@@ -21,8 +21,7 @@
 ## 📸 Overview & Highlights
 
 - 🌐 **Live Production**: [https://get-your-drive.netlify.app](https://get-your-drive.netlify.app)
-- ⚡ **Realtime Database**: Connected to **Firebase Realtime Database** with live bidirectional synchronization.
-- ☁️ **Cloud Database**: **MongoDB Atlas** database cluster for structured schemas and indexing.
+- 🔥 **Primary Cloud Database**: **Firebase Realtime Database** (`https://getyourdrive-148f5-default-rtdb.firebaseio.com`) with live bidirectional synchronization.
 - ✉️ **OTP Verification Engine**: Powered by **Resend.com API** and dedicated SSL **Gmail SMTP**.
 - 💎 **Modern Luxury UI**: Custom glassmorphism aesthetic with light/dark theme switching, fluid micro-animations, and responsive layout.
 
@@ -32,11 +31,11 @@
 
 ### 🔐 1. Smart Authentication & Account Security
 - **3-Step OTP Verification**: Real-time 6-digit verification codes sent via Resend.com / Gmail SMTP.
-- **Direct Dual-Database Authentication**: Login queries Firebase Realtime Database & MongoDB Atlas.
+- **Direct Real-Time Authentication**: Login authenticates seamlessly against Firebase Realtime Database.
 - **Password Security**: Bcrypt hashing (`bcryptjs`), persistent sessions with JSON Web Tokens (`jsonwebtoken`).
 - **Forgot Password Recovery**: Instant reset code verification with secure 15-minute reset tokens.
 
-### 🔥 2. Real-Time Cloud Synchronization (Firebase RTDB)
+### 🔥 2. Real-Time Cloud Synchronization (Firebase Realtime Database)
 - **`users/`**: Real-time user accounts, display names, profile avatars, and credentials.
 - **`cars/`**: Real-time fleet vehicles with rates, categories, specifications, and owner tracking.
 - **`bookings/`**: Live customer reservations, date intervals, driver details, and status.
@@ -65,8 +64,7 @@
 | **Frontend** | HTML5, Vanilla CSS3 (Glassmorphism, CSS Variables), Vanilla JavaScript (ES6+), HTML5 Canvas |
 | **Backend API** | Node.js, Express.js REST API |
 | **Serverless Deployment** | Netlify Functions (`serverless-http`) |
-| **Real-Time Database** | Firebase Realtime Database (`firebase-admin` REST / `firebase-compat` SDK) |
-| **Cloud Database** | MongoDB Atlas with Mongoose ODM |
+| **Real-Time Database** | Firebase Realtime Database (`firebase-compat` Client SDK & HTTPS REST Backend Engine) |
 | **Email & OTP** | Resend.com Cloud API (`@resend/node`), Nodemailer (Gmail SMTP SSL:465) |
 | **Security & Auth** | JSON Web Tokens (`jsonwebtoken`), `bcryptjs`, Rate-limiting, SHA-256 |
 
@@ -103,6 +101,39 @@
 
 ---
 
+## 🚀 Quick Start & Installation
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/vasu1602/Get-your-Drive.git
+cd Get-your-Drive
+```
+
+### 2. Install Dependencies
+```bash
+npm install
+```
+
+### 3. Configure Environment Variables
+Create a `.env` file in the root directory:
+```env
+PORT=3000
+FIREBASE_DATABASE_URL=https://getyourdrive-148f5-default-rtdb.firebaseio.com
+JWT_SECRET=your_secure_jwt_secret
+JWT_VERIFY_SECRET=your_secure_otp_secret
+RESEND_API_KEY=your_resend_api_key
+GMAIL_USER=your_email@gmail.com
+GMAIL_APP_PASSWORD=your_gmail_app_password
+```
+
+### 4. Run Locally
+```bash
+# Start local development server
+npm start
+```
+Open **`http://localhost:3000`** in your browser.
+
+---
 
 ## 📄 License & Author
 

@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { isMongoConnected, fallbackStore } = require('../db');
-const Car = require('../models/Car');
+const { fallbackStore } = require('../db');
 const FirebaseDB = require('../firebaseDb');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 
@@ -126,28 +125,28 @@ const DEFAULT_CARS = [
 // Initialize default cars in fallback store
 DEFAULT_CARS.forEach(car => fallbackStore.cars.set(car.id, { ...car }));
 
-// GET /api/cars -> Get all available fleet vehicles
+// GET /api/cars -> Get all available fleet vehicles (from Firebase Realtime Database)
 router.get('/', async (req, res) => {
   try {
-    let cars = [];
-    if (isMongoConnected()) {
-      cars = await Car.find().sort({ createdAt: -1 });
-      // If DB is empty, seed defaults
-      if (cars.length === 0) {
-        await Car.insertMany(DEFAULT_CARS);
-        cars = await Car.find().sort({ createdAt: -1 });
+    let cars = await FirebaseDB.getAllCars();
+    if (!cars || cars.length === 0) {
+      // Seed default fleet into Firebase Realtime Database
+      for (const car of DEFAULT_CARS) {
+        await FirebaseDB.saveCar(car);
       }
-    } else {
+      cars = await FirebaseDB.getAllCars();
+    }
+    if (!cars || cars.length === 0) {
       cars = Array.from(fallbackStore.cars.values());
     }
     return res.status(200).json({ cars });
   } catch (err) {
     console.error('Error fetching cars:', err);
-    return res.status(500).json({ error: 'Failed to fetch vehicles.' });
+    return res.status(200).json({ cars: Array.from(fallbackStore.cars.values()) });
   }
 });
 
-// POST /api/cars -> Add a custom vehicle (Auth-Protected / Resilient)
+// POST /api/cars -> Add a custom vehicle (Saves to Firebase Realtime Database)
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const { name, brand, category, pricePerDay, fuel, transmission, seats, image, location, creatorUid, creatorEmail } = req.body;
@@ -174,25 +173,16 @@ router.post('/', optionalAuth, async (req, res) => {
       features: ['Air Conditioning', 'Power Steering', 'Bluetooth'],
       creatorUid: req.user ? String(req.user.id) : (creatorUid || 'user-custom'),
       creatorEmail: req.user ? req.user.email : (creatorEmail || ''),
-      createdAt: new Date()
+      createdAt: new Date().toISOString()
     };
 
-    let createdCar;
-    if (isMongoConnected()) {
-      createdCar = await Car.create(newCarData);
-      console.log(`✅ Saved car "${createdCar.name}" to MongoDB Atlas!`);
-    } else {
-      fallbackStore.cars.set(newCarData.id, newCarData);
-      createdCar = newCarData;
-    }
-
-    // Sync to Firebase Realtime Database
-    FirebaseDB.saveCar(createdCar).catch(e => console.warn('Firebase RTDB car sync:', e.message));
+    fallbackStore.cars.set(newCarData.id, newCarData);
+    await FirebaseDB.saveCar(newCarData);
 
     return res.status(201).json({
       success: true,
       message: 'Vehicle listed successfully!',
-      car: createdCar
+      car: newCarData
     });
   } catch (err) {
     console.error('Error creating car:', err);
@@ -204,13 +194,8 @@ router.post('/', optionalAuth, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const carId = req.params.id;
-
-    let car = null;
-    if (isMongoConnected()) {
-      car = await Car.findOne({ id: carId });
-    } else {
-      car = fallbackStore.cars.get(carId);
-    }
+    const cars = await FirebaseDB.getAllCars();
+    const car = cars.find(c => c.id === carId) || fallbackStore.cars.get(carId);
 
     if (!car) {
       return res.status(404).json({ error: 'Vehicle not found.' });
@@ -228,14 +213,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    if (isMongoConnected()) {
-      await Car.deleteOne({ id: carId });
-    } else {
-      fallbackStore.cars.delete(carId);
-    }
-
-    // Sync deletion to Firebase Realtime Database
-    FirebaseDB.deleteCar(carId).catch(e => console.warn('Firebase RTDB car delete sync:', e.message));
+    fallbackStore.cars.delete(carId);
+    await FirebaseDB.deleteCar(carId);
 
     return res.status(200).json({
       success: true,

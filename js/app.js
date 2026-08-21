@@ -936,7 +936,7 @@ const App = {
     this.saveBookings();
     this.updateCounters();
 
-    // Persist to MongoDB Atlas database & Firebase Realtime Database
+    // Persist to Firebase Realtime Database
     if (typeof FirebaseRTDB !== 'undefined') FirebaseRTDB.saveBooking(newBooking);
 
     Api.createBooking(newBooking).then(res => {
@@ -1104,8 +1104,8 @@ const App = {
       this.showToast('Reservation cancelled');
 
       Api.cancelBooking(bookingId).then(() => {
-        console.log('✅ Booking cancelled in MongoDB Atlas:', bookingId);
-      }).catch(e => console.warn('Cancel API note:', e.message));
+      console.log('✅ Booking cancelled in Firebase Realtime Database:', bookingId);
+    }).catch(err => {console.warn('Cancel API note:', err.message);});
     }
   },
 

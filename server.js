@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const { connectDB, getStatus } = require('./server/db');
+const { getStatus } = require('./server/db');
 
 const authRoutes = require('./server/routes/auth');
 const carRoutes = require('./server/routes/cars');
@@ -42,16 +42,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start Server & Connect Database
-async function start() {
-  await connectDB();
-  
-  app.listen(PORT, () => {
-    console.log(`\n======================================================`);
-    console.log(`🚗 GET YOUR DRIVE Server running on http://localhost:${PORT}`);
-    console.log(`📡 REST API active on http://localhost:${PORT}/api/`);
-    console.log(`======================================================\n`);
-  });
-}
-
-start();
+// Start Server
+app.listen(PORT, () => {
+  console.log(`\n======================================================`);
+  console.log(`🚗 GET YOUR DRIVE Server running on http://localhost:${PORT}`);
+  console.log(`🔥 Realtime Cloud Database: Firebase Realtime Database`);
+  console.log(`📡 REST API active on http://localhost:${PORT}/api/`);
+  console.log(`======================================================\n`);
+});

@@ -2,7 +2,7 @@ require('dotenv').config();
 const serverless = require('serverless-http');
 const express = require('express');
 const cors = require('cors');
-const { connectDB, getStatus } = require('../../server/db');
+const { getStatus } = require('../../server/db');
 
 const authRoutes = require('../../server/routes/auth');
 const carRoutes = require('../../server/routes/cars');
@@ -14,16 +14,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Connect to DB for serverless lambda execution
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-  } catch (e) {
-    console.warn('DB connection note in serverless function:', e.message);
-  }
-  next();
-});
 
 // API Router
 const apiRouter = express.Router();

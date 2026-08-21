@@ -1,6 +1,6 @@
 // =============================================================================
 // GET YOUR DRIVE - CLIENT API BRIDGE
-// Communicates with the Express + MongoDB Backend REST API
+// Communicates with the Express + Firebase Realtime Database REST API
 // =============================================================================
 
 const Api = {

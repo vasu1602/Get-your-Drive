@@ -1,30 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { isMongoConnected, fallbackStore } = require('../db');
-const Booking = require('../models/Booking');
+const { fallbackStore } = require('../db');
 const FirebaseDB = require('../firebaseDb');
-const { optionalAuth, authenticateToken } = require('../middleware/auth');
+const { optionalAuth } = require('../middleware/auth');
 
-// GET /api/bookings -> Get bookings (user-specific or empty for guests)
+// GET /api/bookings -> Get bookings (user-specific or empty for guests from Firebase Realtime Database)
 router.get('/', optionalAuth, async (req, res) => {
   try {
     let bookings = [];
-    if (isMongoConnected()) {
-      if (req.user) {
-        bookings = await Booking.find({
-          $or: [{ userId: req.user.id }, { driverEmail: req.user.email }]
-        }).sort({ createdAt: -1 });
-      } else {
-        bookings = [];
-      }
+    if (req.user) {
+      bookings = await FirebaseDB.getUserBookings(req.user.id, req.user.email);
     } else {
-      if (req.user) {
-        bookings = Array.from(fallbackStore.bookings.values()).filter(
-          b => (b.userId && b.userId === req.user.id) || (b.driverEmail && b.driverEmail === req.user.email)
-        );
-      } else {
-        bookings = [];
-      }
+      bookings = [];
     }
 
     return res.status(200).json({
@@ -34,11 +21,11 @@ router.get('/', optionalAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching bookings:', err);
-    return res.status(500).json({ error: 'Failed to fetch bookings.' });
+    return res.status(200).json({ success: true, count: 0, bookings: [] });
   }
 });
 
-// POST /api/bookings -> Create reservation
+// POST /api/bookings -> Create reservation in Firebase Realtime Database
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const { carId, carName, carImage, pickupDate, returnDate, days, totalPrice, location, driverName, driverPhone, driverEmail } = req.body;
@@ -62,24 +49,16 @@ router.post('/', optionalAuth, async (req, res) => {
       driverEmail: driverEmail || (req.user ? req.user.email : ''),
       status: 'Confirmed',
       userId: req.user ? String(req.user.id) : null,
-      createdAt: new Date()
+      createdAt: new Date().toISOString()
     };
 
-    let createdBooking;
-    if (isMongoConnected()) {
-      createdBooking = await Booking.create(newBooking);
-    } else {
-      fallbackStore.bookings.set(newBooking.id, newBooking);
-      createdBooking = newBooking;
-    }
-
-    // Sync to Firebase Realtime Database
-    FirebaseDB.saveBooking(createdBooking).catch(e => console.warn('Firebase RTDB booking sync:', e.message));
+    fallbackStore.bookings.set(newBooking.id, newBooking);
+    await FirebaseDB.saveBooking(newBooking);
 
     return res.status(201).json({
       success: true,
       message: 'Reservation created successfully!',
-      booking: createdBooking
+      booking: newBooking
     });
   } catch (err) {
     console.error('Error creating booking:', err);
@@ -87,25 +66,13 @@ router.post('/', optionalAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/bookings/:id -> Cancel reservation
+// DELETE /api/bookings/:id -> Cancel reservation from Firebase Realtime Database
 router.delete('/:id', async (req, res) => {
   try {
     const bookingId = req.params.id;
 
-    if (isMongoConnected()) {
-      const result = await Booking.deleteOne({ id: bookingId });
-      if (result.deletedCount === 0) {
-        return res.status(404).json({ error: 'Reservation not found.' });
-      }
-    } else {
-      if (!fallbackStore.bookings.has(bookingId)) {
-        return res.status(404).json({ error: 'Reservation not found.' });
-      }
-      fallbackStore.bookings.delete(bookingId);
-    }
-
-    // Sync deletion to Firebase Realtime Database
-    FirebaseDB.deleteBooking(bookingId).catch(e => console.warn('Firebase RTDB booking delete sync:', e.message));
+    fallbackStore.bookings.delete(bookingId);
+    await FirebaseDB.deleteBooking(bookingId);
 
     return res.status(200).json({
       success: true,
